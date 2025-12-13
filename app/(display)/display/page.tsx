@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, Suspense, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useWebSocket } from '@/lib/context/WebSocketContext';
 import { RoomLobby } from '@/components/display/RoomLobby';
@@ -15,8 +15,15 @@ function DisplayContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string>('');
 
+  // Refs to prevent duplicate operations
+  const hasCreatedRoom = useRef(false);
+  const hasJoinedRoom = useRef(false);
+
+  // Create room once on mount
   useEffect(() => {
-    // Create room when display loads
+    if (hasCreatedRoom.current) return;
+    hasCreatedRoom.current = true;
+
     const createRoom = async () => {
       try {
         const response = await fetch('/api/rooms/create', {
@@ -28,12 +35,6 @@ function DisplayContent() {
 
         const data = await response.json();
         setRoomCode(data.code);
-
-        // Try to join via WebSocket if connected
-        if (isConnected) {
-          emit({ type: 'display:join', payload: { roomCode: data.code } });
-        }
-
         setIsLoading(false);
       } catch (error) {
         console.error('Error creating room:', error);
@@ -42,10 +43,16 @@ function DisplayContent() {
       }
     };
 
-    // Create room immediately, don't wait for WebSocket
-    // WebSocket connection can happen in parallel
     createRoom();
-  }, [emit, isConnected, gameType]);
+  }, [gameType]);
+
+  // Join room via WebSocket when connected and room is ready
+  useEffect(() => {
+    if (isConnected && roomCode && !hasJoinedRoom.current) {
+      hasJoinedRoom.current = true;
+      emit({ type: 'display:join', payload: { roomCode } });
+    }
+  }, [isConnected, roomCode, emit]);
 
   if (error) {
     return (

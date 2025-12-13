@@ -28,21 +28,30 @@ function generateRoomCode(attempt: number = 0): string {
   return code;
 }
 
+// Valid game types - should match PLACEHOLDER_GAMES ids in app/page.tsx
+const ALLOWED_GAME_TYPES = ['game-1', 'game-2', 'game-3', 'game-4'];
+
 export async function POST(request: NextRequest) {
   try {
     // Parse optional game type from request body
     let gameType: string | null = null;
     try {
       const body = await request.json();
-      gameType = body.gameType || null;
-    } catch {
+      // Validate gameType against allowed values
+      if (body.gameType && ALLOWED_GAME_TYPES.includes(body.gameType)) {
+        gameType = body.gameType;
+      }
+    } catch (parseError) {
       // No body or invalid JSON, proceed without game type
+      console.warn('Failed to parse request body, proceeding without gameType:', parseError);
     }
 
     const code = generateRoomCode();
     const room = roomStore.create(code, gameType);
 
-    console.log(`🎉 Room created: ${code} (gameType: ${gameType})`);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`🎉 Room created: ${code} (gameType: ${gameType})`);
+    }
 
     return NextResponse.json({
       code: room.code,
