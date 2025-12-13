@@ -1,14 +1,15 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
 import { io, Socket } from 'socket.io-client';
-import type { WebSocketEvent, GameState } from '@/lib/types';
+import type { WebSocketEvent, GameState, Player } from '@/lib/types';
 
 interface WebSocketContextType {
   socket: Socket | null;
   isConnected: boolean;
   gameState: GameState | null;
   emit: (event: WebSocketEvent) => void;
+  joinRoom: (roomCode: string, playerName: string) => Promise<Player>;
 }
 
 const WebSocketContext = createContext<WebSocketContextType | null>(null);
@@ -94,8 +95,42 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     }
   }, [socket]);
 
+  // Promise-based join that waits for server confirmation
+  const joinRoom = useCallback((roomCode: string, playerName: string): Promise<Player> => {
+    return new Promise((resolve, reject) => {
+      if (!socket?.connected) {
+        reject(new Error('WebSocket not connected'));
+        return;
+      }
+
+      const timeout = setTimeout(() => {
+        socket.off('player:joined', onJoined);
+        socket.off('player:error', onError);
+        reject(new Error('Join timeout - server did not respond'));
+      }, 10000); // 10 second timeout
+
+      const onJoined = (player: Player) => {
+        clearTimeout(timeout);
+        socket.off('player:error', onError);
+        resolve(player);
+      };
+
+      const onError = (error: { message: string }) => {
+        clearTimeout(timeout);
+        socket.off('player:joined', onJoined);
+        reject(new Error(error.message));
+      };
+
+      socket.once('player:joined', onJoined);
+      socket.once('player:error', onError);
+
+      console.log('📤 Emitting player:join');
+      socket.emit('player:join', { roomCode, name: playerName });
+    });
+  }, [socket]);
+
   return (
-    <WebSocketContext.Provider value={{ socket, isConnected, gameState, emit }}>
+    <WebSocketContext.Provider value={{ socket, isConnected, gameState, emit, joinRoom }}>
       {children}
     </WebSocketContext.Provider>
   );

@@ -4,10 +4,19 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useWebSocket } from '@/lib/context/WebSocketContext';
 
+// Sanitize player name to prevent XSS and other injection attacks
+function sanitizePlayerName(name: string): string {
+  return name
+    .trim()
+    .replace(/[<>'"&]/g, '') // Remove potentially dangerous characters
+    .replace(/\s+/g, ' ')     // Normalize whitespace
+    .slice(0, 20);            // Enforce max length
+}
+
 function JoinRoomContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { emit, isConnected } = useWebSocket();
+  const { joinRoom, isConnected } = useWebSocket();
 
   const [roomCode, setRoomCode] = useState(searchParams.get('code')?.toUpperCase() || '');
   const [playerName, setPlayerName] = useState('');
@@ -27,40 +36,52 @@ function JoinRoomContent() {
     setError('');
     setIsJoining(true);
 
-    if (!roomCode || !playerName) {
+    // Sanitize inputs
+    const sanitizedName = sanitizePlayerName(playerName);
+    const normalizedCode = roomCode.toUpperCase();
+
+    if (!normalizedCode || !sanitizedName) {
       setError('Please fill in all fields');
       setIsJoining(false);
       return;
     }
 
-    if (roomCode.length !== 4) {
+    if (sanitizedName.length < 1) {
+      setError('Name cannot be empty');
+      setIsJoining(false);
+      return;
+    }
+
+    if (normalizedCode.length !== 4) {
       setError('Room code must be 4 characters');
       setIsJoining(false);
       return;
     }
 
     try {
-      // Validate room exists
-      const res = await fetch(`/api/rooms/${roomCode.toUpperCase()}`);
+      // Validate room exists via API first
+      const res = await fetch(`/api/rooms/${normalizedCode}`);
       if (!res.ok) {
         throw new Error('Room not found');
       }
 
-      // Store player info in localStorage
-      localStorage.setItem('playerName', playerName);
-      localStorage.setItem('roomCode', roomCode.toUpperCase());
+      // Join via WebSocket and wait for server confirmation
+      const player = await joinRoom(normalizedCode, sanitizedName);
+      console.log('✅ Joined as player:', player);
 
-      // Join via WebSocket
-      emit({
-        type: 'player:join',
-        payload: { roomCode: roomCode.toUpperCase(), name: playerName }
-      });
+      // Store player info in localStorage only after successful join
+      localStorage.setItem('playerName', sanitizedName);
+      localStorage.setItem('roomCode', normalizedCode);
 
-      // Navigate to lobby
-      router.push(`/play/lobby?code=${roomCode.toUpperCase()}`);
+      // Navigate to lobby after server confirms join
+      router.push(`/play/lobby?code=${normalizedCode}`);
     } catch (err) {
       console.error('Error joining room:', err);
-      setError('Room not found. Check the code and try again.');
+      const message = err instanceof Error ? err.message : 'Failed to join room';
+      setError(message === 'Room not found'
+        ? 'Room not found. Check the code and try again.'
+        : message
+      );
       setIsJoining(false);
     }
   };
