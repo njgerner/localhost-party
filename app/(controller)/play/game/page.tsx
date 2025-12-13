@@ -95,54 +95,6 @@ function GameControllerContent() {
     );
   }
 
-  // PROMPT PHASE: Show the player their prompt
-  if (gameState.phase === 'prompt') {
-    const prompt = getPlayerPrompt(gameState, currentPlayer.id);
-
-    return (
-      <div className="flex flex-col min-h-screen p-5">
-        <div className="text-center mb-6">
-          <div className="flex items-center justify-center gap-2 mb-1">
-            <span className="text-sm text-white/40" style={{ fontFamily: 'var(--font-mono)' }}>
-              ROUND
-            </span>
-            <span className="room-code text-2xl">{gameState.currentRound}</span>
-          </div>
-        </div>
-
-        <div className="flex-1 flex flex-col items-center justify-center">
-          <div
-            className="text-6xl mb-8 animate-bounce-slow"
-            style={{ fontFamily: 'var(--font-display)', color: 'var(--neon-yellow)' }}
-          >
-            YOUR PROMPT
-          </div>
-
-          {prompt && (
-            <div
-              className="text-3xl text-center px-6 py-8 rounded-2xl max-w-2xl"
-              style={{
-                background: 'rgba(0, 245, 255, 0.1)',
-                border: '2px solid var(--neon-cyan)',
-                color: 'white',
-                fontFamily: 'var(--font-display)',
-              }}
-            >
-              "{prompt.text}"
-            </div>
-          )}
-
-          <p
-            className="mt-8 text-xl opacity-60"
-            style={{ fontFamily: 'var(--font-mono)' }}
-          >
-            Get ready to submit your answer...
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   // SUBMIT PHASE: Player submits their answer
   if (gameState.phase === 'submit') {
     const prompt = getPlayerPrompt(gameState, currentPlayer.id);

@@ -34,13 +34,6 @@ export function GameBoard({ gameState }: GameBoardProps) {
           ) : (
             /* Fallback for other game types */
             <>
-              {gameState.phase === 'prompt' && (
-                <div className="text-center">
-                  <h2 className="text-6xl font-black mb-8">Get Ready!</h2>
-                  <p className="text-4xl opacity-80">Check your phones for the prompt</p>
-                </div>
-              )}
-
               {gameState.phase === 'submit' && (
                 <div className="text-center">
                   <h2 className="text-6xl font-black mb-8">Submit Your Answers</h2>

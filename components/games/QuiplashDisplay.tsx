@@ -9,18 +9,6 @@ interface QuiplashDisplayProps {
 export function QuiplashDisplay({ gameState }: QuiplashDisplayProps) {
   const { phase, prompts, submissions, players, currentRound } = gameState;
 
-  if (phase === 'prompt') {
-    return (
-      <div className="text-center animate-slide-up">
-        <h2 className="text-7xl font-black mb-12">Round {currentRound}</h2>
-        <p className="text-5xl opacity-80">Check your phones for your prompt!</p>
-        <div className="mt-16 text-3xl opacity-60">
-          Answer creatively... the funniest answer wins!
-        </div>
-      </div>
-    );
-  }
-
   if (phase === 'submit') {
     const submittedCount = submissions?.length || 0;
     const totalPlayers = players.length;

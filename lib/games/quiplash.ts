@@ -55,7 +55,7 @@ export function initializeQuiplashGame(
     roomCode,
     gameType: 'quiplash',
     currentRound: 1,
-    phase: 'prompt',
+    phase: 'submit', // Start directly in submit phase so players can answer
     players,
     prompts,
     submissions: [],
