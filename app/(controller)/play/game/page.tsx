@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, useMemo, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useWebSocket } from '@/lib/context/WebSocketContext';
 import { getPlayerPrompt, getVotingOptions } from '@/lib/games/quiplash';
@@ -13,46 +13,34 @@ function GameControllerContent() {
   const roomCode = searchParams.get('code')?.toUpperCase();
   const [playerName, setPlayerName] = useState('');
   const [submissionText, setSubmissionText] = useState('');
-  const [hasSubmitted, setHasSubmitted] = useState(false);
-  const [hasVoted, setHasVoted] = useState(false);
 
   useEffect(() => {
     const savedName = localStorage.getItem('playerName');
-    if (savedName) {
+    if (savedName && !playerName) {
       setPlayerName(savedName);
     }
 
     if (!roomCode) {
       router.push('/play');
     }
-  }, [roomCode, router]);
+  }, [roomCode, router, playerName]);
 
   const currentPlayer = gameState?.players.find((p) => p.name === playerName);
 
-  // Check if player has already submitted
-  useEffect(() => {
-    if (gameState?.submissions && currentPlayer) {
-      const playerSubmission = gameState.submissions.find(
-        (s) => s.playerId === currentPlayer.id
-      );
-      setHasSubmitted(!!playerSubmission);
-    }
+  // Derive hasSubmitted from gameState
+  const hasSubmitted = useMemo(() => {
+    if (!gameState?.submissions || !currentPlayer) return false;
+    return gameState.submissions.some((s) => s.playerId === currentPlayer.id);
   }, [gameState?.submissions, currentPlayer]);
 
-  // Check if player has already voted
-  useEffect(() => {
-    if (gameState?.votes && currentPlayer) {
-      const playerVote = gameState.votes.find(
-        (v) => v.playerId === currentPlayer.id
-      );
-      setHasVoted(!!playerVote);
-    }
+  // Derive hasVoted from gameState
+  const hasVoted = useMemo(() => {
+    if (!gameState?.votes || !currentPlayer) return false;
+    return gameState.votes.some((v) => v.playerId === currentPlayer.id);
   }, [gameState?.votes, currentPlayer]);
 
-  // Reset states when round changes
+  // Reset submission text when round changes
   useEffect(() => {
-    setHasSubmitted(false);
-    setHasVoted(false);
     setSubmissionText('');
   }, [gameState?.currentRound]);
 

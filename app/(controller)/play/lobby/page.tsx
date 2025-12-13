@@ -18,7 +18,7 @@ function PlayerLobbyContent() {
   useEffect(() => {
     // Get player name from localStorage
     const savedName = localStorage.getItem('playerName');
-    if (savedName) {
+    if (savedName && !playerName) {
       setPlayerName(savedName);
     }
 
@@ -26,7 +26,7 @@ function PlayerLobbyContent() {
     if (!roomCode) {
       router.push('/play');
     }
-  }, [roomCode, router]);
+  }, [roomCode, router, playerName]);
 
   // Redirect to game controller when game starts
   useEffect(() => {
