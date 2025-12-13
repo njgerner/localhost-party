@@ -300,9 +300,10 @@ app.prepare().then(() => {
         room.gameState.currentRound = 1;
       }
 
-      // Persist room and game to database
-      try {
-        const dbRoom = await db.room.upsert({
+      // Persist room and game to database (if available)
+      if (db) {
+        try {
+          const dbRoom = await db.room.upsert({
           where: { code: roomCode },
           create: {
             code: roomCode,
@@ -324,10 +325,11 @@ app.prepare().then(() => {
           },
         });
 
-        console.log(`💾 Game persisted to database for room ${roomCode}`);
-      } catch (error) {
-        console.error('Failed to persist game to database:', error);
-        // Continue anyway - game works in-memory
+          console.log(`💾 Game persisted to database for room ${roomCode}`);
+        } catch (error) {
+          console.error('Failed to persist game to database:', error);
+          // Continue anyway - game works in-memory
+        }
       }
 
       // Broadcast updated state
@@ -367,8 +369,9 @@ app.prepare().then(() => {
         ) as any;
 
         // Persist submission to database (async, non-blocking)
-        try {
-          const game = await db.game.findFirst({
+        if (db) {
+          try {
+            const game = await db.game.findFirst({
             where: {
               room: { code: roomCode },
               status: 'active'
@@ -413,11 +416,12 @@ app.prepare().then(() => {
                   content: sanitized,
                 },
               });
+              }
             }
+          } catch (error) {
+            console.error('Failed to persist submission:', error);
+            // Continue - game works in-memory
           }
-        } catch (error) {
-          console.error('Failed to persist submission:', error);
-          // Continue - game works in-memory
         }
       } else {
         // Generic handling for other games
@@ -470,8 +474,9 @@ app.prepare().then(() => {
         ) as any;
 
         // Persist vote to database (async, non-blocking)
-        try {
-          const game = await db.game.findFirst({
+        if (db) {
+          try {
+            const game = await db.game.findFirst({
             where: {
               room: { code: roomCode },
               status: 'active'
@@ -512,11 +517,12 @@ app.prepare().then(() => {
                   });
                 }
               }
+              }
             }
+          } catch (error) {
+            console.error('Failed to persist vote:', error);
+            // Continue - game works in-memory
           }
-        } catch (error) {
-          console.error('Failed to persist vote:', error);
-          // Continue - game works in-memory
         }
       } else {
         // Generic handling for other games
@@ -553,8 +559,9 @@ app.prepare().then(() => {
         room.gameState = advanceToNextRound(room.gameState as GameState) as any;
 
         // Update game state in database
-        try {
-          await db.game.updateMany({
+        if (db) {
+          try {
+            await db.game.updateMany({
             where: {
               room: { code: roomCode },
               status: 'active',
@@ -562,10 +569,11 @@ app.prepare().then(() => {
             data: {
               currentRound: room.gameState.currentRound,
               state: room.gameState,
-            },
-          });
-        } catch (error) {
-          console.error('Failed to update game state:', error);
+              },
+            });
+          } catch (error) {
+            console.error('Failed to update game state:', error);
+          }
         }
 
         broadcastGameState(roomCode);

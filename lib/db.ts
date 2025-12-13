@@ -2,20 +2,33 @@ import { PrismaClient } from './generated/prisma/client';
 import { neon } from '@neondatabase/serverless';
 import { PrismaNeon } from '@prisma/adapter-neon';
 
-// Create Neon SQL client and adapter
-const sql = neon(process.env.DATABASE_URL!);
-const adapter = new PrismaNeon(sql);
+// Check if DATABASE_URL is configured
+const databaseUrl = process.env.DATABASE_URL;
+
+if (!databaseUrl) {
+  console.warn('⚠️  DATABASE_URL not found. Database persistence is disabled.');
+  console.warn('   The game will work in-memory only.');
+  console.warn('   To enable persistence, add DATABASE_URL to your .env file.');
+}
+
+// Create Neon SQL client and adapter only if DATABASE_URL exists
+const sql = databaseUrl ? neon(databaseUrl) : null;
+const adapter = sql ? new PrismaNeon(sql) : undefined;
 
 // Prevent multiple instances in development
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-export const db = globalForPrisma.prisma ?? new PrismaClient({
-  adapter,
-  log: process.env.NODE_ENV === 'development' ? ['error'] : ['error'],
-});
+// Create PrismaClient with adapter if available
+export const db = globalForPrisma.prisma ?? (adapter
+  ? new PrismaClient({
+      adapter,
+      log: process.env.NODE_ENV === 'development' ? ['error'] : ['error'],
+    })
+  : null as any // Database disabled, will error if used
+);
 
-if (process.env.NODE_ENV !== 'production') {
+if (process.env.NODE_ENV !== 'production' && db) {
   globalForPrisma.prisma = db;
 }
