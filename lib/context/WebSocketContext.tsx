@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { io, Socket } from 'socket.io-client';
 import type { WebSocketEvent, GameState } from '@/lib/types';
 
@@ -82,7 +82,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const emit = (event: WebSocketEvent) => {
+  const emit = useCallback((event: WebSocketEvent) => {
     if (socket?.connected) {
       console.log('📤 Emitting event:', event.type);
       socket.emit(event.type, event.payload);
@@ -92,7 +92,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
         'This is expected until Issue #2 (WebSocket Server) is implemented.'
       );
     }
-  };
+  }, [socket]);
 
   return (
     <WebSocketContext.Provider value={{ socket, isConnected, gameState, emit }}>
