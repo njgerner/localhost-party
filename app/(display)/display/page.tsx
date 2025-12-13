@@ -13,16 +13,19 @@ function DisplayContent() {
   const { gameState, emit, isConnected } = useWebSocket();
   const [roomCode, setRoomCode] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string>('');
 
-  // Refs to prevent duplicate operations
+  // Refs to prevent duplicate operations (persists across re-renders and strict mode)
   const hasCreatedRoom = useRef(false);
   const hasJoinedRoom = useRef(false);
 
-  // Create room once on mount
+  // Create room once on mount - uses both ref and state for robust race condition prevention
   useEffect(() => {
-    if (hasCreatedRoom.current) return;
+    // Skip if already created or currently creating
+    if (hasCreatedRoom.current || isCreating) return;
     hasCreatedRoom.current = true;
+    setIsCreating(true);
 
     const createRoom = async () => {
       try {
@@ -31,20 +34,27 @@ function DisplayContent() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ gameType }),
         });
-        if (!response.ok) throw new Error('Failed to create room');
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to create room');
+        }
 
         const data = await response.json();
         setRoomCode(data.code);
         setIsLoading(false);
-      } catch (error) {
-        console.error('Error creating room:', error);
-        setError('Failed to create room. Please refresh the page.');
+      } catch (err) {
+        console.error('Error creating room:', err);
+        const message = err instanceof Error ? err.message : 'Failed to create room';
+        setError(`${message}. Please refresh the page.`);
         setIsLoading(false);
+      } finally {
+        setIsCreating(false);
       }
     };
 
     createRoom();
-  }, [gameType]);
+  }, [gameType, isCreating]);
 
   // Join room via WebSocket when connected and room is ready
   useEffect(() => {

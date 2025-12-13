@@ -1,83 +1,43 @@
 'use client';
 
 import Link from "next/link";
+import { PLACEHOLDER_GAMES, type Game, type GameColor } from "@/lib/constants/games";
 
-interface Game {
-  id: string;
-  name: string;
-  description: string;
-  playerCount: string;
-  color: 'cyan' | 'magenta' | 'yellow' | 'green' | 'orange';
-  icon: string;
-}
+// Animation timing constant
+const CARD_ANIMATION_STAGGER_MS = 100;
 
-const PLACEHOLDER_GAMES: Game[] = [
-  {
-    id: 'game-1',
-    name: 'Pixel Showdown',
-    description: 'Battle your friends in this fast-paced trivia challenge',
-    playerCount: '3-8 players',
-    color: 'cyan',
-    icon: '🎮',
-  },
-  {
-    id: 'game-2',
-    name: 'Neon Bluff',
-    description: 'Can you spot the faker? Deception meets creativity',
-    playerCount: '4-10 players',
-    color: 'magenta',
-    icon: '🎭',
-  },
-  {
-    id: 'game-3',
-    name: 'Synth Quiz',
-    description: 'Music, movies, and pop culture from the golden era',
-    playerCount: '2-12 players',
-    color: 'yellow',
-    icon: '🎵',
-  },
-  {
-    id: 'game-4',
-    name: 'Retro Draw',
-    description: 'Draw, guess, and laugh with pixelated masterpieces',
-    playerCount: '3-8 players',
-    color: 'green',
-    icon: '🖼️',
-  },
-];
-
-const colorClasses = {
+const colorClasses: Record<GameColor, { border: string; text: string; glow: string; hoverGlow: string; bg: string }> = {
   cyan: {
-    border: 'border-[var(--neon-cyan)]',
-    text: 'text-[var(--neon-cyan)]',
+    border: 'border-[var(--neon-cyan,#00f5ff)]',
+    text: 'text-[var(--neon-cyan,#00f5ff)]',
     glow: 'shadow-[0_0_20px_rgba(0,245,255,0.3)]',
     hoverGlow: 'hover:shadow-[0_0_30px_rgba(0,245,255,0.5),0_0_60px_rgba(0,245,255,0.3)]',
     bg: 'bg-[rgba(0,245,255,0.1)]',
   },
   magenta: {
-    border: 'border-[var(--neon-magenta)]',
-    text: 'text-[var(--neon-magenta)]',
+    border: 'border-[var(--neon-magenta,#ff00aa)]',
+    text: 'text-[var(--neon-magenta,#ff00aa)]',
     glow: 'shadow-[0_0_20px_rgba(255,0,170,0.3)]',
     hoverGlow: 'hover:shadow-[0_0_30px_rgba(255,0,170,0.5),0_0_60px_rgba(255,0,170,0.3)]',
     bg: 'bg-[rgba(255,0,170,0.1)]',
   },
   yellow: {
-    border: 'border-[var(--neon-yellow)]',
-    text: 'text-[var(--neon-yellow)]',
+    border: 'border-[var(--neon-yellow,#f0ff00)]',
+    text: 'text-[var(--neon-yellow,#f0ff00)]',
     glow: 'shadow-[0_0_20px_rgba(240,255,0,0.3)]',
     hoverGlow: 'hover:shadow-[0_0_30px_rgba(240,255,0,0.5),0_0_60px_rgba(240,255,0,0.3)]',
     bg: 'bg-[rgba(240,255,0,0.1)]',
   },
   green: {
-    border: 'border-[var(--neon-green)]',
-    text: 'text-[var(--neon-green)]',
+    border: 'border-[var(--neon-green,#00ff88)]',
+    text: 'text-[var(--neon-green,#00ff88)]',
     glow: 'shadow-[0_0_20px_rgba(0,255,136,0.3)]',
     hoverGlow: 'hover:shadow-[0_0_30px_rgba(0,255,136,0.5),0_0_60px_rgba(0,255,136,0.3)]',
     bg: 'bg-[rgba(0,255,136,0.1)]',
   },
   orange: {
-    border: 'border-[var(--neon-orange)]',
-    text: 'text-[var(--neon-orange)]',
+    border: 'border-[var(--neon-orange,#ff6600)]',
+    text: 'text-[var(--neon-orange,#ff6600)]',
     glow: 'shadow-[0_0_20px_rgba(255,102,0,0.3)]',
     hoverGlow: 'hover:shadow-[0_0_30px_rgba(255,102,0,0.5),0_0_60px_rgba(255,102,0,0.3)]',
     bg: 'bg-[rgba(255,102,0,0.1)]',
@@ -102,7 +62,7 @@ function GameCard({ game, index }: { game: Game; index: number }) {
         hover:-translate-y-1
         animate-slide-up
       `}
-      style={{ animationDelay: `${index * 100}ms` }}
+      style={{ animationDelay: `${index * CARD_ANIMATION_STAGGER_MS}ms` }}
     >
       {/* Scanline effect on hover */}
       <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none overflow-hidden rounded-lg">
