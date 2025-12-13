@@ -91,10 +91,6 @@ npm run dev
 
 6. Open [http://localhost:3000](http://localhost:3000) to see the app
 
-> **⚡ Quick Start**: See [QUICK_START.md](QUICK_START.md) for a 2-minute setup guide
->
-> **🎉 WebSocket Server**: Real-time features are now working! See [WEBSOCKET_TEST_GUIDE.md](WEBSOCKET_TEST_GUIDE.md) to test multiplayer sync.
-
 ## Development
 
 - `npm run dev` - Start development server (custom Next.js + Socket.io server)
