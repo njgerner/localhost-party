@@ -142,10 +142,25 @@ function handleVote(gameState, voterId, voterName, votedForPlayerId) {
   const updatedVotes = [...(gameState.votes || []), newVote];
   const allPlayersVoted = updatedVotes.length === gameState.players.length;
 
+  // If all players voted, calculate and apply scores immediately
+  // This ensures scores are visible as soon as the results phase begins
+  if (allPlayersVoted) {
+    const stateWithVotes = { ...gameState, votes: updatedVotes };
+    const roundScores = calculateRoundScores(stateWithVotes);
+    const updatedPlayers = updatePlayerScores(gameState.players, roundScores);
+
+    return {
+      ...gameState,
+      votes: updatedVotes,
+      phase: 'results',
+      players: updatedPlayers,
+      roundResults: roundScores,
+    };
+  }
+
   return {
     ...gameState,
     votes: updatedVotes,
-    phase: allPlayersVoted ? 'results' : gameState.phase,
   };
 }
 
@@ -173,32 +188,33 @@ function updatePlayerScores(players, roundScores) {
   }));
 }
 
+/**
+ * Advance to next round or end game
+ * Note: Scores are already calculated and applied in handleVote when transitioning to results.
+ * This function just handles the transition to the next round or game end.
+ */
 function advanceToNextRound(gameState) {
-  const roundScores = calculateRoundScores(gameState);
-  const updatedPlayers = updatePlayerScores(gameState.players, roundScores);
+  // Scores are already calculated in handleVote, use the current player scores
+  // and roundResults from gameState
 
   if (gameState.currentRound >= DEFAULT_CONFIG.roundsPerGame) {
     return {
       ...gameState,
-      players: updatedPlayers,
-      roundResults: roundScores,
-      phase: 'results',
+      phase: 'results', // Final results - scores already in players array
     };
   }
 
   // Start next round - go directly to submit phase (no separate prompt display phase)
   const nextRound = gameState.currentRound + 1;
-  const newPrompts = generatePromptsForRound(updatedPlayers, nextRound);
+  const newPrompts = generatePromptsForRound(gameState.players, nextRound);
 
   return {
     ...gameState,
     currentRound: nextRound,
     phase: 'submit', // Go directly to submit - players see prompts on their controllers
-    players: updatedPlayers,
     prompts: newPrompts,
     submissions: [],
     votes: [],
-    roundResults: roundScores,
     timeRemaining: DEFAULT_CONFIG.submissionTimeLimit,
   };
 }
