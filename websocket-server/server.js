@@ -337,8 +337,8 @@ const io = new Server(httpServer, {
         return callback(null, true);
       }
 
-      // Allow any *.vercel.app domain for preview deployments
-      if (origin.match(/https:\/\/.*\.vercel\.app$/)) {
+      // Allow localhost-party Vercel preview deployments only
+      if (origin.match(/https:\/\/localhost-party.*\.vercel\.app$/)) {
         return callback(null, true);
       }
 
