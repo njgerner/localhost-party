@@ -10,17 +10,17 @@ import type {
 const soundEffects = new Map<SoundEffectId, Howl>();
 const musicTracks = new Map<MusicTrackId, Howl>();
 
-// Sound effect paths (will be populated when assets are added)
-const SOUND_PATHS: Record<SoundEffectId, string> = {
-  "button-click": "/sounds/button-click.mp3",
-  "player-join": "/sounds/player-join.mp3",
-  "submit-complete": "/sounds/submit-complete.mp3",
-  "vote-cast": "/sounds/vote-cast.mp3",
-  "phase-transition": "/sounds/phase-transition.mp3",
-  "all-ready": "/sounds/all-ready.mp3",
-  "clock-tick": "/sounds/clock-tick.mp3",
-  "clock-tick-fast": "/sounds/clock-tick-fast.mp3",
-  "time-up": "/sounds/time-up.mp3",
+// Sound effect paths - using M4A (AAC) format (universally supported)
+const SOUND_PATHS: Record<SoundEffectId, string[]> = {
+  "button-click": ["/sounds/button-click.m4a"],
+  "player-join": ["/sounds/player-join.m4a"],
+  "submit-complete": ["/sounds/submit-complete.m4a"],
+  "vote-cast": ["/sounds/vote-cast.m4a"],
+  "phase-transition": ["/sounds/phase-transition.m4a"],
+  "all-ready": ["/sounds/all-ready.m4a"],
+  "clock-tick": ["/sounds/clock-tick.m4a"],
+  "clock-tick-fast": ["/sounds/clock-tick-fast.m4a"],
+  "time-up": ["/sounds/time-up.m4a"],
 };
 
 const MUSIC_PATHS: Record<MusicTrackId, string> = {
@@ -33,8 +33,9 @@ const MUSIC_PATHS: Record<MusicTrackId, string> = {
  * Preloads commonly used sounds for instant playback
  */
 export function initializeSounds(): void {
-  // Preload button click sound (most common)
-  loadSound("button-click");
+  // Don't preload - sounds will load on first play
+  // This avoids errors on page load if files are missing
+  console.log("Sound system initialized (sounds will load on demand)");
 }
 
 /**
@@ -46,7 +47,7 @@ function loadSound(soundId: SoundEffectId): Howl {
   }
 
   const sound = new Howl({
-    src: [SOUND_PATHS[soundId]],
+    src: SOUND_PATHS[soundId], // Already an array of formats
     preload: true,
     volume: 0.8,
     onloaderror: (id, error) => {
