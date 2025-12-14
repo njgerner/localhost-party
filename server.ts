@@ -99,7 +99,7 @@ app.prepare().then(() => {
 
   const io = new Server(httpServer, {
     cors: {
-      origin: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+      origin: process.env.NEXT_PUBLIC_LH_PARTY_APP_URL || 'http://localhost:3000',
       methods: ['GET', 'POST'],
     },
   });

@@ -9,7 +9,7 @@ interface RoomLobbyProps {
 }
 
 export function RoomLobby({ roomCode, players }: RoomLobbyProps) {
-  const joinUrl = `${process.env.NEXT_PUBLIC_APP_URL}/play?code=${roomCode}`;
+  const joinUrl = `${process.env.NEXT_PUBLIC_LH_PARTY_APP_URL}/play?code=${roomCode}`;
 
   // Player avatars - arcade/gaming themed
   const avatars = ['⚡', '🎮', '👾', '🕹️', '🎯', '🔥', '💎', '🚀'];
@@ -58,7 +58,7 @@ export function RoomLobby({ roomCode, players }: RoomLobbyProps) {
         <div className="text-center">
           <p className="text-sm text-white/40 mb-2">Scan or visit</p>
           <p className="text-lg neon-text-cyan" style={{ fontFamily: 'var(--font-mono)' }}>
-            {process.env.NEXT_PUBLIC_APP_URL}/play
+            {process.env.NEXT_PUBLIC_LH_PARTY_APP_URL}/play
           </p>
         </div>
       </div>

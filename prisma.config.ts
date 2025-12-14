@@ -4,9 +4,10 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
-// Use DATABASE_URL if available, otherwise use dummy for prisma generate
+// Use LH_PARTY_DATABASE_URL if available, otherwise use dummy for prisma generate
 const databaseUrl =
-  process.env.DATABASE_URL || "postgresql://dummy:dummy@localhost:5432/dummy";
+  process.env.LH_PARTY_DATABASE_URL ||
+  "postgresql://dummy:dummy@localhost:5432/dummy";
 
 export default defineConfig({
   schema: "prisma/schema.prisma",

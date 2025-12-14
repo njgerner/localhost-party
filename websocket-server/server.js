@@ -312,8 +312,8 @@ const httpServer = createServer((req, res) => {
 const getAllowedOrigins = () => {
   const origins = [];
 
-  if (process.env.NEXT_PUBLIC_APP_URL) {
-    origins.push(process.env.NEXT_PUBLIC_APP_URL);
+  if (process.env.NEXT_PUBLIC_LH_PARTY_APP_URL) {
+    origins.push(process.env.NEXT_PUBLIC_LH_PARTY_APP_URL);
   }
 
   origins.push('http://localhost:3000');

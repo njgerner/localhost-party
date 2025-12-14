@@ -61,12 +61,12 @@ In Doppler dashboard, create these environments:
 
 Add these secrets in Doppler for each environment:
 
-| Secret                | Description            | Example                  |
-| --------------------- | ---------------------- | ------------------------ |
-| `DATABASE_URL`        | Neon connection string | `postgresql://...`       |
-| `ANTHROPIC_API_KEY`   | Claude API key         | `sk-ant-...`             |
-| `NEXT_PUBLIC_APP_URL` | Vercel app URL         | `https://app.vercel.app` |
-| `NEXT_PUBLIC_WS_URL`  | Railway WebSocket URL  | `https://ws.railway.app` |
+| Secret                        | Description            | Example                  |
+| ----------------------------- | ---------------------- | ------------------------ |
+| `LH_PARTY_DATABASE_URL`       | Neon connection string | `postgresql://...`       |
+| `LH_PARTY_ANTHROPIC_API_KEY`  | Claude API key         | `sk-ant-...`             |
+| `NEXT_PUBLIC_LH_PARTY_APP_URL`| Vercel app URL         | `https://app.vercel.app` |
+| `NEXT_PUBLIC_LH_PARTY_WS_URL` | Railway WebSocket URL  | `https://ws.railway.app` |
 
 ### 1.4 Link Local Project
 
@@ -117,7 +117,7 @@ In Railway project settings, add:
 
 ```
 PORT=3001
-NEXT_PUBLIC_APP_URL=https://your-vercel-app.vercel.app
+NEXT_PUBLIC_LH_PARTY_APP_URL=https://your-vercel-app.vercel.app
 ```
 
 Or connect Doppler:
@@ -156,10 +156,10 @@ In Vercel project settings → Environment Variables:
 **Option A: Manual**
 
 ```
-DATABASE_URL=your-neon-url
-ANTHROPIC_API_KEY=your-api-key
-NEXT_PUBLIC_APP_URL=https://your-app.vercel.app
-NEXT_PUBLIC_WS_URL=https://your-railway-url.railway.app
+LH_PARTY_DATABASE_URL=your-neon-url
+LH_PARTY_ANTHROPIC_API_KEY=your-api-key
+NEXT_PUBLIC_LH_PARTY_APP_URL=https://your-app.vercel.app
+NEXT_PUBLIC_LH_PARTY_WS_URL=https://your-railway-url.railway.app
 ```
 
 **Option B: Doppler Integration**
@@ -180,8 +180,8 @@ vercel --prod
 
 After both services are deployed, update the URLs in Doppler:
 
-1. Update `NEXT_PUBLIC_APP_URL` with your Vercel URL
-2. Update `NEXT_PUBLIC_WS_URL` with your Railway URL
+1. Update `NEXT_PUBLIC_LH_PARTY_APP_URL` with your Vercel URL
+2. Update `NEXT_PUBLIC_LH_PARTY_WS_URL` with your Railway URL
 3. Redeploy both services to pick up the changes
 
 ## Local Development with Doppler
@@ -200,7 +200,7 @@ npm run dev:ws    # Terminal 2
 ### WebSocket Connection Fails
 
 1. Check Railway logs for errors
-2. Verify `NEXT_PUBLIC_WS_URL` is correct in Vercel
+2. Verify `NEXT_PUBLIC_LH_PARTY_WS_URL` is correct in Vercel
 3. Check CORS configuration in `websocket-server/server.js`
 
 ### Database Connection Issues

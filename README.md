@@ -76,10 +76,10 @@ cp .env.example .env.local
 Add your credentials:
 
 ```
-DATABASE_URL="your-neon-database-url"
-ANTHROPIC_API_KEY="your-anthropic-api-key"
-NEXT_PUBLIC_APP_URL="http://localhost:3000"
-NEXT_PUBLIC_WS_URL="http://localhost:3000"
+LH_PARTY_DATABASE_URL="your-neon-database-url"
+LH_PARTY_ANTHROPIC_API_KEY="your-anthropic-api-key"
+NEXT_PUBLIC_LH_PARTY_APP_URL="http://localhost:3000"
+NEXT_PUBLIC_LH_PARTY_WS_URL="http://localhost:3000"
 ```
 
 4. Initialize the database:
