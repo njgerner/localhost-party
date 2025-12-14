@@ -265,6 +265,7 @@ export function advanceToNextRound(
     prompts: newPrompts,
     submissions: [],
     votes: [],
+    roundResults: {}, // Clear previous round results
     timeRemaining: config.submissionTimeLimit,
   };
 }

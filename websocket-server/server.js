@@ -215,6 +215,7 @@ function advanceToNextRound(gameState) {
     prompts: newPrompts,
     submissions: [],
     votes: [],
+    roundResults: {}, // Clear previous round results
     timeRemaining: DEFAULT_CONFIG.submissionTimeLimit,
   };
 }
