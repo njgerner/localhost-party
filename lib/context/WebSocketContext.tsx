@@ -30,10 +30,10 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Check if WebSocket URL is configured
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL;
+    const wsUrl = process.env.NEXT_PUBLIC_LH_PARTY_WS_URL;
     if (!wsUrl) {
       console.warn(
-        "⚠️ NEXT_PUBLIC_WS_URL not configured. WebSocket features disabled."
+        "⚠️ NEXT_PUBLIC_LH_PARTY_WS_URL not configured. WebSocket features disabled."
       );
       return;
     }
