@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import type { Player } from "@/lib/types";
 
@@ -12,13 +12,13 @@ interface RoomLobbyProps {
 export function RoomLobby({ roomCode, players }: RoomLobbyProps) {
   // Use window.location.origin to get the correct URL in any environment
   // This works for localhost, Vercel preview, and production
-  // Using lazy initializer to avoid hydration mismatch and ESLint warnings
-  const [appUrl] = useState(() => {
+  // Using useMemo since this is a computed value that doesn't change
+  const appUrl: string = useMemo(() => {
     if (typeof window !== "undefined") {
       return window.location.origin;
     }
     return "";
-  });
+  }, []);
 
   const joinUrl = appUrl ? `${appUrl}/play?code=${roomCode}` : "";
 
