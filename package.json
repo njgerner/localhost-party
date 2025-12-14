@@ -3,14 +3,19 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "node server.js",
+    "dev": "doppler run -- tsx server.ts",
+    "dev:local": "tsx server.ts",
     "dev:next": "next dev",
+    "dev:ws": "cd websocket-server && npm run dev",
     "build": "next build",
-    "start": "NODE_ENV=production node server.js",
+    "start": "NODE_ENV=production tsx server.ts",
     "start:next": "next start",
     "lint": "eslint",
     "type-check": "tsc --noEmit",
-    "prepare": "husky || true"
+    "prepare": "husky || true",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio"
   },
   "lint-staged": {
     "*.{ts,tsx}": [
@@ -24,9 +29,11 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.56",
     "@anthropic-ai/sdk": "^0.71.2",
+    "@neondatabase/serverless": "^1.0.2",
+    "@prisma/adapter-neon": "^7.1.0",
     "@prisma/client": "^7.1.0",
     "ai": "^5.0.113",
-    "lightningcss-darwin-arm64": "^1.30.2",
+    "dotenv": "^16.4.5",
     "next": "16.0.10",
     "prisma": "^7.1.0",
     "qrcode.react": "^4.2.0",
@@ -49,6 +56,7 @@
     "lint-staged": "^16.2.7",
     "prettier": "^3.7.4",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }
