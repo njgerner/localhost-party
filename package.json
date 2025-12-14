@@ -10,6 +10,7 @@
     "start:next": "next start",
     "lint": "eslint",
     "type-check": "tsc --noEmit",
+    "postinstall": "prisma generate",
     "prepare": "husky || true"
   },
   "lint-staged": {
