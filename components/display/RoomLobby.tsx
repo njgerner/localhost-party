@@ -9,7 +9,12 @@ interface RoomLobbyProps {
 }
 
 export function RoomLobby({ roomCode, players }: RoomLobbyProps) {
-  const joinUrl = `${process.env.NEXT_PUBLIC_LH_PARTY_APP_URL}/play?code=${roomCode}`;
+  // Use configured URL, or Vercel's auto-provided URL, or fallback to localhost
+  const appUrl =
+    process.env.NEXT_PUBLIC_LH_PARTY_APP_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+    'http://localhost:3000';
+  const joinUrl = `${appUrl}/play?code=${roomCode}`;
 
   // Player avatars - arcade/gaming themed
   const avatars = ['⚡', '🎮', '👾', '🕹️', '🎯', '🔥', '💎', '🚀'];
@@ -58,7 +63,7 @@ export function RoomLobby({ roomCode, players }: RoomLobbyProps) {
         <div className="text-center">
           <p className="text-sm text-white/40 mb-2">Scan or visit</p>
           <p className="text-lg neon-text-cyan" style={{ fontFamily: 'var(--font-mono)' }}>
-            {process.env.NEXT_PUBLIC_LH_PARTY_APP_URL}/play
+            {appUrl}/play
           </p>
         </div>
       </div>
