@@ -613,6 +613,18 @@ io.on('connection', (socket) => {
         socket.data.playerName,
         sanitized
       );
+
+      // Sync room.players with updated scores from game state
+      // This is necessary because broadcastGameState() copies room.players to room.gameState.players
+      room.players = room.players.map((existingPlayer) => {
+        const updatedPlayer = room.gameState.players.find(
+          (p) => p.id === existingPlayer.id
+        );
+        return {
+          ...existingPlayer,
+          score: updatedPlayer?.score ?? existingPlayer.score,
+        };
+      });
     } else {
       if (!room.gameState.votes) {
         room.gameState.votes = [];
