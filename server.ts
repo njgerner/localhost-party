@@ -190,7 +190,13 @@ app.prepare().then(() => {
 
     // Emit to all clients in the room
     io.to(roomCode).emit("game:state-update", room.gameState);
-    console.log(`📤 Broadcast game state to room ${roomCode}:`, room.gameState);
+    console.log(`📤 Broadcast game state to room ${roomCode}:`, {
+      phase: room.gameState.phase,
+      players: room.players.length,
+      votes: room.gameState.votes?.length || 0,
+      roundResults: room.gameState.roundResults,
+      playerScores: room.players.map((p) => ({ name: p.name, score: p.score })),
+    });
   }
 
   io.on("connection", (socket) => {
@@ -482,6 +488,14 @@ app.prepare().then(() => {
 
     // Generic player vote with validation
     socket.on("player:vote", async ({ roomCode, data }) => {
+      console.log(
+        `🗳️ [Socket] player:vote received - roomCode: ${roomCode}, data:`,
+        data
+      );
+      console.log(
+        `🗳️ [Socket] Voter info - playerId: ${socket.data.playerId}, playerName: ${socket.data.playerName}`
+      );
+
       // Validate room code
       if (!isValidRoomCode(roomCode)) {
         socket.emit("player:error", { message: "Invalid room code" });
@@ -490,18 +504,25 @@ app.prepare().then(() => {
 
       // Validate and sanitize vote data
       const { valid, sanitized } = validatePayloadData(data);
+      console.log(
+        `🗳️ [Socket] Vote data validation - valid: ${valid}, sanitized:`,
+        sanitized
+      );
       if (!valid) {
         socket.emit("player:error", { message: "Invalid vote data" });
         return;
       }
-
-      console.log(`🗳️ Player vote in room ${roomCode}:`, sanitized);
 
       const room = sharedRooms.get(roomCode);
       if (!room) {
         socket.emit("player:error", { message: "Room not found" });
         return;
       }
+
+      console.log(
+        `🗳️ [Socket] Before handleVote - phase: ${room.gameState.phase}, roundResults:`,
+        room.gameState.roundResults
+      );
 
       // Handle vote based on game type
       if (room.gameState.gameType === "quiplash") {
@@ -512,6 +533,11 @@ app.prepare().then(() => {
           sanitized as string // Validated above, votes are player IDs (strings) for quiplash
         );
         room.gameState = updatedGameState as SharedRoom["gameState"];
+
+        console.log(
+          `🗳️ [Socket] After handleVote - phase: ${room.gameState.phase}, roundResults:`,
+          room.gameState.roundResults
+        );
 
         // Sync room.players with updated scores from game state
         // This is necessary because broadcastGameState() copies room.players to room.gameState.players
@@ -525,6 +551,11 @@ app.prepare().then(() => {
             score: updatedPlayer?.score ?? existingPlayer.score,
           };
         });
+
+        console.log(
+          `🗳️ [Socket] After sync - room.players scores:`,
+          room.players.map((p) => ({ name: p.name, score: p.score }))
+        );
 
         // Persist vote to database (async, non-blocking)
         if (db) {

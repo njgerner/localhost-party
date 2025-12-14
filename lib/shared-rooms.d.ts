@@ -25,6 +25,7 @@ export interface SharedRoom {
     players: Player[];
     submissions?: GameSubmission[];
     votes?: GameVote[];
+    roundResults?: Record<string, number>;
   };
   displaySocketId: string | null;
   lastActivity: number;

@@ -148,14 +148,23 @@ export function handleVote(
   voterName: string,
   votedForPlayerId: string
 ): GameState {
+  console.log(
+    `[Vote] Processing vote from ${voterName} (${voterId}) for player ${votedForPlayerId}`
+  );
+  console.log(
+    `[Vote] Current votes count: ${gameState.votes?.length || 0}, Players count: ${gameState.players.length}`
+  );
+
   // Prevent voting for yourself
   if (voterId === votedForPlayerId) {
+    console.log(`[Vote] REJECTED: Player tried to vote for themselves`);
     return gameState;
   }
 
   // Check if player already voted
   const existingVote = gameState.votes?.find((v) => v.playerId === voterId);
   if (existingVote) {
+    console.log(`[Vote] REJECTED: Player already voted`);
     return gameState; // Already voted
   }
 
@@ -171,12 +180,21 @@ export function handleVote(
   // Check if all players have voted
   const allPlayersVoted = updatedVotes.length === gameState.players.length;
 
+  console.log(
+    `[Vote] Vote accepted. New votes count: ${updatedVotes.length}, All voted: ${allPlayersVoted}`
+  );
+
   // If all players voted, calculate and apply scores immediately
   // This ensures scores are visible as soon as the results phase begins
   if (allPlayersVoted) {
     const stateWithVotes = { ...gameState, votes: updatedVotes };
     const roundScores = calculateRoundScores(stateWithVotes);
+    console.log(`[Vote] Calculated round scores:`, roundScores);
     const updatedPlayers = updatePlayerScores(gameState.players, roundScores);
+    console.log(
+      `[Vote] Updated player scores:`,
+      updatedPlayers.map((p) => ({ name: p.name, score: p.score }))
+    );
 
     return {
       ...gameState,
