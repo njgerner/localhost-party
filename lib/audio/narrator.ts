@@ -1,5 +1,5 @@
 import type { VoiceId, NarratorOptions } from "./types";
-import { ELEVENLABS_MODELS, RATE_LIMITS } from "./constants";
+import { RATE_LIMITS } from "./constants";
 
 // Voice ID mapping for ElevenLabs
 const VOICE_IDS: Record<VoiceId, string> = {
@@ -35,27 +35,11 @@ class Narrator {
   private queue: NarrationQueueItem[] = [];
   private isProcessing = false;
   private currentAudio: HTMLAudioElement | null = null;
-  private apiKey: string | null = null;
-  private lastCallTimestamp = 0;
-  private callCount = 0;
   private callTimestamps: number[] = [];
 
   constructor() {
-    // API key will be set at runtime via setApiKey()
-    // This is necessary because process.env is not available in client-side code
-  }
-
-  /**
-   * Set the ElevenLabs API key for TTS
-   * Should be called on client initialization
-   */
-  setApiKey(key: string | null): void {
-    this.apiKey = key;
-    if (!key && process.env.NODE_ENV === "development") {
-      console.warn(
-        "ElevenLabs API key not configured. Voice narration will use fallback."
-      );
-    }
+    // Narrator now uses server-side proxy for TTS
+    // No API key needed on client side
   }
 
   /**
@@ -208,15 +192,6 @@ class Narrator {
     text: string,
     options: NarratorOptions
   ): Promise<void> {
-    // If no API key, fall back to silent mode
-    if (!this.apiKey) {
-      if (process.env.NODE_ENV === "development") {
-        console.log("[Narrator]", text);
-      }
-      await this.sleep(text.length * 50); // Simulate speech duration
-      return;
-    }
-
     // Check rate limit before making API call
     if (this.isRateLimited()) {
       if (process.env.NODE_ENV === "development") {
@@ -228,49 +203,40 @@ class Narrator {
 
     try {
       const voiceId = VOICE_IDS[options.voice || "game-host"];
-      const stability = options.emotion === "excited" ? 0.3 : 0.5;
-      const similarityBoost = 0.75;
       const speed = options.speed || 1.0;
 
-      // Record this API call for rate limiting
+      // Record this API call for client-side rate limiting
       this.recordApiCall();
 
-      // Call ElevenLabs API
-      const response = await fetch(
-        `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "xi-api-key": this.apiKey,
-          },
-          body: JSON.stringify({
-            text,
-            model_id: ELEVENLABS_MODELS.TURBO_V2_5,
-            voice_settings: {
-              stability,
-              similarity_boost: similarityBoost,
-              style: options.emotion === "dramatic" ? 0.5 : 0,
-              use_speaker_boost: true,
-            },
-          }),
-        }
-      );
+      // Call server-side TTS proxy (keeps API key secure)
+      const response = await fetch("/api/tts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text,
+          voiceId,
+          emotion: options.emotion || "neutral",
+        }),
+      });
 
       if (!response.ok) {
-        const errorText = await response.text();
+        const error = await response.json().catch(() => ({
+          message: response.statusText,
+        }));
+
         if (process.env.NODE_ENV === "development") {
           console.error(
-            `ElevenLabs API error [${response.status}]:`,
-            errorText
+            `[Narrator] TTS API error [${response.status}]:`,
+            error
           );
         }
-        throw new Error(
-          `ElevenLabs API error: ${response.status} ${response.statusText}`
-        );
+
+        throw new Error(error.message || "TTS service error");
       }
 
-      // Get audio blob
+      // Get audio blob from server
       const audioBlob = await response.blob();
       const audioUrl = URL.createObjectURL(audioBlob);
 
@@ -280,16 +246,13 @@ class Narrator {
       // Cleanup
       URL.revokeObjectURL(audioUrl);
     } catch (error) {
-      // Fallback to silent mode (API unavailable or key invalid)
+      // Fallback to silent mode
       if (process.env.NODE_ENV === "development") {
         console.log("[Narrator - Fallback Mode]", text);
-        if (this.apiKey) {
-          // Only show detailed error if API key is configured but failing
-          console.warn(
-            "ElevenLabs API call failed, using text fallback:",
-            error instanceof Error ? error.message : error
-          );
-        }
+        console.warn(
+          "TTS service unavailable, using silent fallback:",
+          error instanceof Error ? error.message : error
+        );
       }
       await this.sleep(text.length * 50);
     }

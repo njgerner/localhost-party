@@ -82,6 +82,7 @@ function loadSound(soundId: SoundEffectId): Howl {
 
 /**
  * Load a music track into memory
+ * Uses lazy loading - track only loads when first played
  */
 function loadMusic(trackId: MusicTrackId): Howl {
   if (musicTracks.has(trackId)) {
@@ -90,9 +91,10 @@ function loadMusic(trackId: MusicTrackId): Howl {
 
   const track = new Howl({
     src: [MUSIC_PATHS[trackId]],
-    preload: true,
+    preload: false, // Lazy load - only loads when play() is called
     volume: AUDIO_VOLUMES.MUSIC_DEFAULT,
     loop: true,
+    html5: true, // Use HTML5 Audio for streaming large files (reduces memory)
     onloaderror: () => {
       if (process.env.NODE_ENV === "development") {
         console.info(
