@@ -168,20 +168,14 @@ export default function Home() {
   const [hasPlayedWelcome, setHasPlayedWelcome] = useState(false);
   const [lastHoveredGame, setLastHoveredGame] = useState<string | null>(null);
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isMountedRef = useRef(true);
   const [isMounted, setIsMounted] = useState(false);
 
   // Track when component mounts (client-side only)
-  // Note: Using layout effect to avoid ESLint warning about setState in effect
   useEffect(() => {
     // Delay to next tick to avoid cascading renders
     const timer = setTimeout(() => setIsMounted(true), 0);
     return () => clearTimeout(timer);
-  }, []);
-
-  // Play background music and welcome message on mount
-  useEffect(() => {
-    // Don't auto-play until user interacts (browser restriction)
-    // Music will start after first interaction
   }, []);
 
   // Handle initial welcome after first user interaction
@@ -232,6 +226,9 @@ export default function Home() {
 
     // Debounce hover - only speak if hovering for configured duration
     hoverTimeoutRef.current = setTimeout(() => {
+      // Don't execute if component has unmounted
+      if (!isMountedRef.current) return;
+
       setLastHoveredGame(game.id);
       const narration = GAME_NARRATIONS[game.id];
       if (narration) {
@@ -261,12 +258,13 @@ export default function Home() {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      isMountedRef.current = false;
       if (hoverTimeoutRef.current) {
         clearTimeout(hoverTimeoutRef.current);
+        hoverTimeoutRef.current = null;
       }
-      stopMusic("lobby-theme", { fadeOut: AUDIO_DURATIONS.FADE_OUT_QUICK });
     };
-  }, [stopMusic]);
+  }, []);
 
   return (
     <div

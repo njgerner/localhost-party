@@ -59,12 +59,17 @@ export function AudioProvider({ children }: AudioProviderProps) {
     };
   });
 
-  // Save settings to localStorage when they change
+  // Save only persistent settings to localStorage (exclude temporary state like isSpeaking, isUnlocked)
   useEffect(() => {
     if (typeof window !== "undefined") {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      const persistentState = {
+        muted: state.muted,
+        volume: state.volume,
+        musicVolume: state.musicVolume,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(persistentState));
     }
-  }, [state]);
+  }, [state.muted, state.volume, state.musicVolume]);
 
   // Initialize sound system and fetch API configuration
   useEffect(() => {

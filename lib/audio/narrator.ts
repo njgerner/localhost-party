@@ -60,10 +60,32 @@ class Narrator {
 
   /**
    * Speak text using ElevenLabs TTS
+   * Validates input length and queue size to prevent abuse
    */
   async speak(text: string, options: NarratorOptions = {}): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.queue.push({ text, options, resolve, reject });
+      // Validate text length
+      if (text.length > RATE_LIMITS.NARRATOR_MAX_TEXT_LENGTH) {
+        const error = new Error(
+          `Text exceeds maximum length of ${RATE_LIMITS.NARRATOR_MAX_TEXT_LENGTH} characters`
+        );
+        reject(error);
+        return;
+      }
+
+      // Validate queue size to prevent spam
+      if (this.queue.length >= RATE_LIMITS.NARRATOR_MAX_QUEUE_SIZE) {
+        const error = new Error(
+          `Narrator queue is full (max ${RATE_LIMITS.NARRATOR_MAX_QUEUE_SIZE} items)`
+        );
+        reject(error);
+        return;
+      }
+
+      // Sanitize text (basic XSS prevention, though TTS doesn't render HTML)
+      const sanitizedText = text.replace(/[<>]/g, "");
+
+      this.queue.push({ text: sanitizedText, options, resolve, reject });
 
       if (!this.isProcessing) {
         this.processQueue();
@@ -135,7 +157,13 @@ class Narrator {
     }
 
     this.isProcessing = true;
-    const item = this.queue.shift()!;
+    const item = this.queue.shift();
+
+    // Guard against concurrent queue modifications
+    if (!item) {
+      this.isProcessing = false;
+      return;
+    }
 
     try {
       // Pause before speaking if specified

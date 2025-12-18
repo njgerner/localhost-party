@@ -26,8 +26,10 @@ export const AUDIO_DURATIONS = {
   HOVER_DEBOUNCE: 500, // Debounce delay for game hover narration
 } as const;
 
-// Rate limiting
+// Rate limiting and validation
 export const RATE_LIMITS = {
   NARRATOR_MAX_CALLS_PER_MINUTE: 10, // Maximum narrator API calls per minute
   NARRATOR_COOLDOWN_MS: 6000, // Cooldown between narrator calls (60000ms / 10 = 6000ms)
+  NARRATOR_MAX_TEXT_LENGTH: 1000, // Maximum characters per narration (ElevenLabs free tier consideration)
+  NARRATOR_MAX_QUEUE_SIZE: 5, // Maximum queued narrations to prevent spam
 } as const;
