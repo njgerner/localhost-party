@@ -7,6 +7,7 @@ import { useAudio } from "@/lib/context/AudioContext";
 import { RoomLobby } from "@/components/display/RoomLobby";
 import { GameBoard } from "@/components/display/GameBoard";
 import { Leaderboard } from "@/components/display/Leaderboard";
+import { AUDIO_VOLUMES, AUDIO_DURATIONS } from "@/lib/audio/constants";
 
 function DisplayContent() {
   const searchParams = useSearchParams();
@@ -78,15 +79,15 @@ function DisplayContent() {
       isMusicPlaying.current = true;
       playMusic("lobby-theme", {
         loop: true,
-        fadeIn: 2000,
-        volume: 0.25, // Slightly louder than home page
+        fadeIn: AUDIO_DURATIONS.FADE_IN_SLOW,
+        volume: AUDIO_VOLUMES.LOBBY_MUSIC,
       });
     }
 
     // Stop music when game starts (leaving lobby)
     if (currentPhase && currentPhase !== "lobby" && isMusicPlaying.current) {
       isMusicPlaying.current = false;
-      stopMusic("lobby-theme", { fadeOut: 1500 });
+      stopMusic("lobby-theme", { fadeOut: AUDIO_DURATIONS.FADE_OUT_MEDIUM });
     }
 
     // Play phase transition sound

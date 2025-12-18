@@ -18,6 +18,7 @@ import type {
 } from "../audio/types";
 import * as sounds from "../audio/sounds";
 import { narrator } from "../audio/narrator";
+import { AUDIO_VOLUMES } from "../audio/constants";
 
 const AudioContext = createContext<AudioContextValue | undefined>(undefined);
 
@@ -34,7 +35,7 @@ export function AudioProvider({ children }: AudioProviderProps) {
       return {
         muted: false,
         volume: 1.0,
-        musicVolume: 0.3,
+        musicVolume: AUDIO_VOLUMES.MUSIC_DEFAULT,
         isUnlocked: false,
         isSpeaking: false,
       };
@@ -52,7 +53,7 @@ export function AudioProvider({ children }: AudioProviderProps) {
     return {
       muted: false,
       volume: 1.0,
-      musicVolume: 0.3,
+      musicVolume: AUDIO_VOLUMES.MUSIC_DEFAULT,
       isUnlocked: false,
       isSpeaking: false,
     };
@@ -77,12 +78,14 @@ export function AudioProvider({ children }: AudioProviderProps) {
       .then((config) => {
         if (config.elevenlabsApiKey) {
           narrator.setApiKey(config.elevenlabsApiKey);
-        } else {
+        } else if (process.env.NODE_ENV === "development") {
           console.warn("No ElevenLabs API key found in config");
         }
       })
       .catch((error) => {
-        console.error("Failed to fetch config:", error);
+        if (process.env.NODE_ENV === "development") {
+          console.error("Failed to fetch config:", error);
+        }
       });
 
     // Cleanup on unmount
@@ -99,7 +102,9 @@ export function AudioProvider({ children }: AudioProviderProps) {
       await sounds.unlockAudioContext();
       setState((prev) => ({ ...prev, isUnlocked: true }));
     } catch (error) {
-      console.error("Failed to unlock audio:", error);
+      if (process.env.NODE_ENV === "development") {
+        console.error("Failed to unlock audio:", error);
+      }
     }
   }, [state.isUnlocked]);
 
@@ -148,7 +153,9 @@ export function AudioProvider({ children }: AudioProviderProps) {
   const speak = useCallback(
     async (text: string, options?: NarratorOptions) => {
       if (state.muted) {
-        console.log("[Narrator - Muted]", text);
+        if (process.env.NODE_ENV === "development") {
+          console.log("[Narrator - Muted]", text);
+        }
         return;
       }
 
@@ -156,7 +163,7 @@ export function AudioProvider({ children }: AudioProviderProps) {
 
       try {
         // Duck music if playing
-        sounds.setMusicVolume(state.musicVolume * 0.3);
+        sounds.setMusicVolume(state.musicVolume * AUDIO_VOLUMES.MUSIC_DUCKING);
 
         await narrator.speak(text, options);
       } finally {

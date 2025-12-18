@@ -5,6 +5,7 @@ import type {
   SoundOptions,
   MusicOptions,
 } from "./types";
+import { AUDIO_VOLUMES } from "./constants";
 
 // Sound effect registry
 const soundEffects = new Map<SoundEffectId, Howl>();
@@ -44,7 +45,6 @@ const MUSIC_PATHS: Record<MusicTrackId, string> = {
 export function initializeSounds(): void {
   // Don't preload - sounds will load on first play
   // This avoids errors on page load if files are missing
-  console.log("Sound system initialized (sounds will load on demand)");
 }
 
 /**
@@ -55,20 +55,24 @@ function loadSound(soundId: SoundEffectId): Howl {
     return soundEffects.get(soundId)!;
   }
 
-  console.log(`[Audio] Loading sound: ${soundId}`, SOUND_PATHS[soundId]);
-
   const sound = new Howl({
     src: SOUND_PATHS[soundId], // Already an array of formats
     preload: true,
-    volume: 0.8,
+    volume: AUDIO_VOLUMES.SOUND_EFFECTS,
     onload: () => {
-      console.log(`[Audio] ✅ Sound loaded: ${soundId}`);
+      if (process.env.NODE_ENV === "development") {
+        console.log(`[Audio] Sound loaded: ${soundId}`);
+      }
     },
-    onloaderror: (id, error) => {
-      console.error(`[Audio] ❌ Load error for "${soundId}":`, error);
+    onloaderror: () => {
+      if (process.env.NODE_ENV === "development") {
+        console.error(`[Audio] Load error for "${soundId}"`);
+      }
     },
-    onplayerror: (id, error) => {
-      console.error(`[Audio] ❌ Play error for "${soundId}":`, error);
+    onplayerror: () => {
+      if (process.env.NODE_ENV === "development") {
+        console.error(`[Audio] Play error for "${soundId}"`);
+      }
     },
   });
 
@@ -87,12 +91,14 @@ function loadMusic(trackId: MusicTrackId): Howl {
   const track = new Howl({
     src: [MUSIC_PATHS[trackId]],
     preload: true,
-    volume: 0.3,
+    volume: AUDIO_VOLUMES.MUSIC_DEFAULT,
     loop: true,
     onloaderror: () => {
-      console.info(
-        `[Audio] Music track "${trackId}" not found - this is expected if you haven't added the file yet. See public/sounds/music/MUSIC_GENERATION_GUIDE.md`
-      );
+      if (process.env.NODE_ENV === "development") {
+        console.info(
+          `[Audio] Music track "${trackId}" not found. See public/sounds/music/MUSIC_GENERATION_GUIDE.md`
+        );
+      }
     },
   });
 
@@ -107,7 +113,6 @@ export function playSound(
   soundId: SoundEffectId,
   options: SoundOptions = {}
 ): void {
-  console.log(`[Audio] Playing sound: ${soundId}`, options);
   const sound = loadSound(soundId);
 
   // Apply options
@@ -120,14 +125,12 @@ export function playSound(
 
   // Play with fade in if specified
   if (options.fadeIn) {
-    const targetVolume = options.volume ?? 0.8;
+    const targetVolume = options.volume ?? AUDIO_VOLUMES.SOUND_EFFECTS;
     sound.volume(0);
-    const playId = sound.play();
-    console.log(`[Audio] Play started with fade-in, ID: ${playId}`);
+    sound.play();
     sound.fade(0, targetVolume, options.fadeIn);
   } else {
-    const playId = sound.play();
-    console.log(`[Audio] Play started, ID: ${playId}`);
+    sound.play();
   }
 }
 

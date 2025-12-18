@@ -8,6 +8,7 @@ import {
   type GameColor,
 } from "@/lib/constants/games";
 import { useAudio } from "@/lib/context/AudioContext";
+import { AUDIO_VOLUMES, AUDIO_DURATIONS } from "@/lib/audio/constants";
 
 // Animation timing constant
 const CARD_ANIMATION_STAGGER_MS = 100;
@@ -195,8 +196,8 @@ export default function Home() {
       // Start background music
       playMusic("lobby-theme", {
         loop: true,
-        fadeIn: 2000,
-        volume: 0.2, // Quieter for home page
+        fadeIn: AUDIO_DURATIONS.FADE_IN_SLOW,
+        volume: AUDIO_VOLUMES.HOME_MUSIC,
       });
 
       // Welcome narration
@@ -205,7 +206,7 @@ export default function Home() {
         {
           voice: "game-host",
           emotion: "welcoming",
-          pauseBefore: 500,
+          pauseBefore: AUDIO_DURATIONS.NARRATOR_PAUSE_BEFORE,
         }
       );
     }
@@ -229,7 +230,7 @@ export default function Home() {
       return;
     }
 
-    // Debounce hover - only speak if hovering for 500ms
+    // Debounce hover - only speak if hovering for configured duration
     hoverTimeoutRef.current = setTimeout(() => {
       setLastHoveredGame(game.id);
       const narration = GAME_NARRATIONS[game.id];
@@ -239,7 +240,7 @@ export default function Home() {
           emotion: "excited",
         });
       }
-    }, 500);
+    }, AUDIO_DURATIONS.HOVER_DEBOUNCE);
   };
 
   // Handle game selection
@@ -254,7 +255,7 @@ export default function Home() {
     });
 
     // Fade out music before navigation
-    stopMusic("lobby-theme", { fadeOut: 1000 });
+    stopMusic("lobby-theme", { fadeOut: AUDIO_DURATIONS.FADE_OUT_FAST });
   };
 
   // Cleanup on unmount
@@ -263,7 +264,7 @@ export default function Home() {
       if (hoverTimeoutRef.current) {
         clearTimeout(hoverTimeoutRef.current);
       }
-      stopMusic("lobby-theme", { fadeOut: 500 });
+      stopMusic("lobby-theme", { fadeOut: AUDIO_DURATIONS.FADE_OUT_QUICK });
     };
   }, [stopMusic]);
 

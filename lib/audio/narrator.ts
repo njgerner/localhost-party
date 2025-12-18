@@ -1,4 +1,5 @@
 import type { VoiceId, NarratorOptions } from "./types";
+import { ELEVENLABS_MODELS, RATE_LIMITS } from "./constants";
 
 // Voice ID mapping for ElevenLabs
 const VOICE_IDS: Record<VoiceId, string> = {
@@ -35,6 +36,9 @@ class Narrator {
   private isProcessing = false;
   private currentAudio: HTMLAudioElement | null = null;
   private apiKey: string | null = null;
+  private lastCallTimestamp = 0;
+  private callCount = 0;
+  private callTimestamps: number[] = [];
 
   constructor() {
     // API key will be set at runtime via setApiKey()
@@ -47,12 +51,10 @@ class Narrator {
    */
   setApiKey(key: string | null): void {
     this.apiKey = key;
-    if (!key) {
+    if (!key && process.env.NODE_ENV === "development") {
       console.warn(
         "ElevenLabs API key not configured. Voice narration will use fallback."
       );
-    } else {
-      console.log("ElevenLabs API key configured for narrator");
     }
   }
 
@@ -89,6 +91,41 @@ class Narrator {
   }
 
   /**
+   * Check if rate limit is exceeded
+   * Prevents API abuse by limiting calls to max per minute
+   */
+  private isRateLimited(): boolean {
+    const now = Date.now();
+    const oneMinuteAgo = now - 60000;
+
+    // Remove timestamps older than 1 minute
+    this.callTimestamps = this.callTimestamps.filter(
+      (timestamp) => timestamp > oneMinuteAgo
+    );
+
+    // Check if we've exceeded the rate limit
+    if (
+      this.callTimestamps.length >= RATE_LIMITS.NARRATOR_MAX_CALLS_PER_MINUTE
+    ) {
+      if (process.env.NODE_ENV === "development") {
+        console.warn(
+          `[Narrator] Rate limit exceeded: ${this.callTimestamps.length} calls in the last minute. Max allowed: ${RATE_LIMITS.NARRATOR_MAX_CALLS_PER_MINUTE}`
+        );
+      }
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Record an API call for rate limiting
+   */
+  private recordApiCall(): void {
+    this.callTimestamps.push(Date.now());
+  }
+
+  /**
    * Process narration queue
    */
   private async processQueue(): Promise<void> {
@@ -121,7 +158,9 @@ class Narrator {
 
       item.resolve();
     } catch (error) {
-      console.error("Narration error:", error);
+      if (process.env.NODE_ENV === "development") {
+        console.error("Narration error:", error);
+      }
 
       if (item.options.onError) {
         item.options.onError(error as Error);
@@ -143,7 +182,18 @@ class Narrator {
   ): Promise<void> {
     // If no API key, fall back to silent mode
     if (!this.apiKey) {
-      console.log("[Narrator]", text);
+      if (process.env.NODE_ENV === "development") {
+        console.log("[Narrator]", text);
+      }
+      await this.sleep(text.length * 50); // Simulate speech duration
+      return;
+    }
+
+    // Check rate limit before making API call
+    if (this.isRateLimited()) {
+      if (process.env.NODE_ENV === "development") {
+        console.log("[Narrator - Rate Limited]", text);
+      }
       await this.sleep(text.length * 50); // Simulate speech duration
       return;
     }
@@ -153,6 +203,9 @@ class Narrator {
       const stability = options.emotion === "excited" ? 0.3 : 0.5;
       const similarityBoost = 0.75;
       const speed = options.speed || 1.0;
+
+      // Record this API call for rate limiting
+      this.recordApiCall();
 
       // Call ElevenLabs API
       const response = await fetch(
@@ -165,7 +218,7 @@ class Narrator {
           },
           body: JSON.stringify({
             text,
-            model_id: "eleven_turbo_v2_5", // Updated model for free tier compatibility
+            model_id: ELEVENLABS_MODELS.TURBO_V2_5,
             voice_settings: {
               stability,
               similarity_boost: similarityBoost,
@@ -178,7 +231,12 @@ class Narrator {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`ElevenLabs API error [${response.status}]:`, errorText);
+        if (process.env.NODE_ENV === "development") {
+          console.error(
+            `ElevenLabs API error [${response.status}]:`,
+            errorText
+          );
+        }
         throw new Error(
           `ElevenLabs API error: ${response.status} ${response.statusText}`
         );
@@ -194,14 +252,16 @@ class Narrator {
       // Cleanup
       URL.revokeObjectURL(audioUrl);
     } catch (error) {
-      // Fallback to console log (API unavailable or key invalid)
-      console.log("[Narrator - Fallback Mode]", text);
-      if (this.apiKey) {
-        // Only show detailed error if API key is configured but failing
-        console.warn(
-          "ElevenLabs API call failed, using text fallback:",
-          error instanceof Error ? error.message : error
-        );
+      // Fallback to silent mode (API unavailable or key invalid)
+      if (process.env.NODE_ENV === "development") {
+        console.log("[Narrator - Fallback Mode]", text);
+        if (this.apiKey) {
+          // Only show detailed error if API key is configured but failing
+          console.warn(
+            "ElevenLabs API call failed, using text fallback:",
+            error instanceof Error ? error.message : error
+          );
+        }
       }
       await this.sleep(text.length * 50);
     }
