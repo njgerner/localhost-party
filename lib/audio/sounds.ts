@@ -10,17 +10,26 @@ import type {
 const soundEffects = new Map<SoundEffectId, Howl>();
 const musicTracks = new Map<MusicTrackId, Howl>();
 
-// Sound effect paths - using M4A (AAC) format (universally supported)
+// Sound effect paths - using M4A (AAC) format with MP3 fallback
 const SOUND_PATHS: Record<SoundEffectId, string[]> = {
-  "button-click": ["/sounds/button-click-sys.m4a"], // Test with system sound
-  "player-join": ["/sounds/player-join.m4a"],
-  "submit-complete": ["/sounds/submit-complete.m4a"],
-  "vote-cast": ["/sounds/vote-cast.m4a"],
-  "phase-transition": ["/sounds/phase-transition.m4a"],
-  "all-ready": ["/sounds/all-ready.m4a"],
-  "clock-tick": ["/sounds/clock-tick.m4a"],
-  "clock-tick-fast": ["/sounds/clock-tick-fast.m4a"],
-  "time-up": ["/sounds/time-up.m4a"],
+  "button-click": ["/sounds/button-click.m4a", "/sounds/button-click.mp3"],
+  "player-join": ["/sounds/player-join.m4a", "/sounds/player-join.mp3"],
+  "submit-complete": [
+    "/sounds/submit-complete.m4a",
+    "/sounds/submit-complete.mp3",
+  ],
+  "vote-cast": ["/sounds/vote-cast.m4a", "/sounds/vote-cast.mp3"],
+  "phase-transition": [
+    "/sounds/phase-transition.m4a",
+    "/sounds/phase-transition.mp3",
+  ],
+  "all-ready": ["/sounds/all-ready.m4a", "/sounds/all-ready.mp3"],
+  "clock-tick": ["/sounds/clock-tick.m4a", "/sounds/clock-tick.mp3"],
+  "clock-tick-fast": [
+    "/sounds/clock-tick-fast.m4a",
+    "/sounds/clock-tick-fast.mp3",
+  ],
+  "time-up": ["/sounds/time-up.m4a", "/sounds/time-up.mp3"],
 };
 
 const MUSIC_PATHS: Record<MusicTrackId, string> = {
@@ -46,12 +55,20 @@ function loadSound(soundId: SoundEffectId): Howl {
     return soundEffects.get(soundId)!;
   }
 
+  console.log(`[Audio] Loading sound: ${soundId}`, SOUND_PATHS[soundId]);
+
   const sound = new Howl({
     src: SOUND_PATHS[soundId], // Already an array of formats
     preload: true,
     volume: 0.8,
+    onload: () => {
+      console.log(`[Audio] ✅ Sound loaded: ${soundId}`);
+    },
     onloaderror: (id, error) => {
-      console.warn(`Sound effect "${soundId}" not found:`, error);
+      console.error(`[Audio] ❌ Load error for "${soundId}":`, error);
+    },
+    onplayerror: (id, error) => {
+      console.error(`[Audio] ❌ Play error for "${soundId}":`, error);
     },
   });
 
@@ -72,8 +89,10 @@ function loadMusic(trackId: MusicTrackId): Howl {
     preload: true,
     volume: 0.3,
     loop: true,
-    onloaderror: (id, error) => {
-      console.warn(`Music track "${trackId}" not found:`, error);
+    onloaderror: () => {
+      console.info(
+        `[Audio] Music track "${trackId}" not found - this is expected if you haven't added the file yet. See public/sounds/music/MUSIC_GENERATION_GUIDE.md`
+      );
     },
   });
 
@@ -88,6 +107,7 @@ export function playSound(
   soundId: SoundEffectId,
   options: SoundOptions = {}
 ): void {
+  console.log(`[Audio] Playing sound: ${soundId}`, options);
   const sound = loadSound(soundId);
 
   // Apply options
@@ -102,10 +122,12 @@ export function playSound(
   if (options.fadeIn) {
     const targetVolume = options.volume ?? 0.8;
     sound.volume(0);
-    sound.play();
+    const playId = sound.play();
+    console.log(`[Audio] Play started with fade-in, ID: ${playId}`);
     sound.fade(0, targetVolume, options.fadeIn);
   } else {
-    sound.play();
+    const playId = sound.play();
+    console.log(`[Audio] Play started, ID: ${playId}`);
   }
 }
 

@@ -65,11 +65,25 @@ export function AudioProvider({ children }: AudioProviderProps) {
     }
   }, [state]);
 
-  // Initialize sound system
+  // Initialize sound system and fetch API configuration
   useEffect(() => {
     sounds.initializeSounds();
     sounds.setMasterVolume(state.volume);
     sounds.setMuted(state.muted);
+
+    // Fetch ElevenLabs API key from config endpoint
+    fetch("/api/config")
+      .then((res) => res.json())
+      .then((config) => {
+        if (config.elevenlabsApiKey) {
+          narrator.setApiKey(config.elevenlabsApiKey);
+        } else {
+          console.warn("No ElevenLabs API key found in config");
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to fetch config:", error);
+      });
 
     // Cleanup on unmount
     return () => {

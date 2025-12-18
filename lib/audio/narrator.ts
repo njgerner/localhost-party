@@ -1,26 +1,25 @@
 import type { VoiceId, NarratorOptions } from "./types";
 
 // Voice ID mapping for ElevenLabs
-// These will need to be configured with actual ElevenLabs voice IDs
 const VOICE_IDS: Record<VoiceId, string> = {
-  "game-host": "default", // Replace with actual voice ID
-  "dramatic-host": "default",
-  pirate: "default",
-  robot: "default",
-  butler: "default",
-  surfer: "default",
-  detective: "default",
-  shakespeare: "default",
-  "valley-girl": "default",
-  announcer: "default",
-  electric: "default",
-  gamer: "default",
-  alien: "default",
-  retro: "default",
-  focused: "default",
-  intense: "default",
-  elegant: "default",
-  explorer: "default",
+  "game-host": "lIkvgvMqGbN2y0vNTyg8", // Custom: Localhost Party Host
+  "dramatic-host": "pNInz6obpgDQGcFmaJgB", // Adam - brash and confident
+  pirate: "SOYHLrjzK2X1ezoPC6cr", // Harry - animated warrior
+  robot: "N2lVS1w4EtoT3dr4eOWO", // Callum - gravelly, unsettling
+  butler: "JBFqnCBsd6RMkjVDRZzb", // George - warm British resonance
+  surfer: "IKne3meq5aSn9XLyUdCD", // Charlie - young Australian, energetic
+  detective: "onwK4e9ZLuTAKqWW03F9", // Daniel - British, formal
+  shakespeare: "JBFqnCBsd6RMkjVDRZzb", // George - warm British
+  "valley-girl": "FGY2WhTYpPnrIDTdsKH5", // Laura - sassy young female
+  announcer: "pqHfZKP75CvOlQylNhV4", // Bill - crisp, friendly narrator
+  electric: "TX3LPaxmHKxFdv7VOQHJ", // Liam - energetic young male
+  gamer: "IKne3meq5aSn9XLyUdCD", // Charlie - hyped Australian
+  alien: "N2lVS1w4EtoT3dr4eOWO", // Callum - unsettling edge
+  retro: "CwhRBWXzGAHq8TQ4Fs17", // Roger - classy, easy going
+  focused: "cjVigY5qzO86Huf0OWal", // Eric - smooth, professional
+  intense: "pNInz6obpgDQGcFmaJgB", // Adam - aggressive confidence
+  elegant: "Xb7hH8MSUJpSbSDYk0k2", // Alice - British professional
+  explorer: "nPczCjzI2devNBz1zQrb", // Brian - resonant, comforting
 };
 
 // Speech queue for sequential narration
@@ -38,13 +37,22 @@ class Narrator {
   private apiKey: string | null = null;
 
   constructor() {
-    // Get API key from environment
-    this.apiKey = process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY || null;
+    // API key will be set at runtime via setApiKey()
+    // This is necessary because process.env is not available in client-side code
+  }
 
-    if (!this.apiKey) {
+  /**
+   * Set the ElevenLabs API key for TTS
+   * Should be called on client initialization
+   */
+  setApiKey(key: string | null): void {
+    this.apiKey = key;
+    if (!key) {
       console.warn(
-        "ElevenLabs API key not configured. Voice narration will be disabled."
+        "ElevenLabs API key not configured. Voice narration will use fallback."
       );
+    } else {
+      console.log("ElevenLabs API key configured for narrator");
     }
   }
 
@@ -157,7 +165,7 @@ class Narrator {
           },
           body: JSON.stringify({
             text,
-            model_id: "eleven_monolingual_v1",
+            model_id: "eleven_turbo_v2_5", // Updated model for free tier compatibility
             voice_settings: {
               stability,
               similarity_boost: similarityBoost,
@@ -169,7 +177,11 @@ class Narrator {
       );
 
       if (!response.ok) {
-        throw new Error(`ElevenLabs API error: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error(`ElevenLabs API error [${response.status}]:`, errorText);
+        throw new Error(
+          `ElevenLabs API error: ${response.status} ${response.statusText}`
+        );
       }
 
       // Get audio blob
@@ -182,9 +194,15 @@ class Narrator {
       // Cleanup
       URL.revokeObjectURL(audioUrl);
     } catch (error) {
-      console.error("Failed to generate speech:", error);
-      // Fallback to console log
-      console.log("[Narrator]", text);
+      // Fallback to console log (API unavailable or key invalid)
+      console.log("[Narrator - Fallback Mode]", text);
+      if (this.apiKey) {
+        // Only show detailed error if API key is configured but failing
+        console.warn(
+          "ElevenLabs API call failed, using text fallback:",
+          error instanceof Error ? error.message : error
+        );
+      }
       await this.sleep(text.length * 50);
     }
   }

@@ -12,7 +12,7 @@ function DisplayContent() {
   const searchParams = useSearchParams();
   const gameType = searchParams.get("game");
   const { gameState, emit, isConnected } = useWebSocket();
-  const { playSound } = useAudio();
+  const { playSound, playMusic, stopMusic } = useAudio();
   const [roomCode, setRoomCode] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
@@ -22,6 +22,7 @@ function DisplayContent() {
   const hasCreatedRoom = useRef(false);
   const hasJoinedRoom = useRef(false);
   const previousPhase = useRef(gameState?.phase);
+  const isMusicPlaying = useRef(false);
 
   // Create room once on mount - uses both ref and state for robust race condition prevention
   useEffect(() => {
@@ -68,16 +69,44 @@ function DisplayContent() {
     }
   }, [isConnected, roomCode, emit]);
 
-  // Play sound on phase transitions
+  // Play lobby music and handle phase transitions
   useEffect(() => {
-    if (gameState?.phase && gameState.phase !== previousPhase.current) {
+    const currentPhase = gameState?.phase;
+
+    // Start music when in lobby phase
+    if (currentPhase === "lobby" && !isMusicPlaying.current) {
+      isMusicPlaying.current = true;
+      playMusic("lobby-theme", {
+        loop: true,
+        fadeIn: 2000,
+        volume: 0.25, // Slightly louder than home page
+      });
+    }
+
+    // Stop music when game starts (leaving lobby)
+    if (currentPhase && currentPhase !== "lobby" && isMusicPlaying.current) {
+      isMusicPlaying.current = false;
+      stopMusic("lobby-theme", { fadeOut: 1500 });
+    }
+
+    // Play phase transition sound
+    if (currentPhase && currentPhase !== previousPhase.current) {
       // Skip sound on initial load
       if (previousPhase.current !== undefined) {
         playSound("phase-transition");
       }
-      previousPhase.current = gameState.phase;
+      previousPhase.current = currentPhase;
     }
-  }, [gameState?.phase, playSound]);
+  }, [gameState?.phase, playSound, playMusic, stopMusic]);
+
+  // Cleanup music on unmount
+  useEffect(() => {
+    return () => {
+      if (isMusicPlaying.current) {
+        stopMusic("lobby-theme", { fadeOut: 500 });
+      }
+    };
+  }, [stopMusic]);
 
   if (error) {
     return (
