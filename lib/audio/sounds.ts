@@ -5,22 +5,32 @@ import type {
   SoundOptions,
   MusicOptions,
 } from "./types";
+import { AUDIO_VOLUMES } from "./constants";
 
 // Sound effect registry
 const soundEffects = new Map<SoundEffectId, Howl>();
 const musicTracks = new Map<MusicTrackId, Howl>();
 
-// Sound effect paths (will be populated when assets are added)
-const SOUND_PATHS: Record<SoundEffectId, string> = {
-  "button-click": "/sounds/button-click.mp3",
-  "player-join": "/sounds/player-join.mp3",
-  "submit-complete": "/sounds/submit-complete.mp3",
-  "vote-cast": "/sounds/vote-cast.mp3",
-  "phase-transition": "/sounds/phase-transition.mp3",
-  "all-ready": "/sounds/all-ready.mp3",
-  "clock-tick": "/sounds/clock-tick.mp3",
-  "clock-tick-fast": "/sounds/clock-tick-fast.mp3",
-  "time-up": "/sounds/time-up.mp3",
+// Sound effect paths - using M4A (AAC) format with MP3 fallback
+const SOUND_PATHS: Record<SoundEffectId, string[]> = {
+  "button-click": ["/sounds/button-click.m4a", "/sounds/button-click.mp3"],
+  "player-join": ["/sounds/player-join.m4a", "/sounds/player-join.mp3"],
+  "submit-complete": [
+    "/sounds/submit-complete.m4a",
+    "/sounds/submit-complete.mp3",
+  ],
+  "vote-cast": ["/sounds/vote-cast.m4a", "/sounds/vote-cast.mp3"],
+  "phase-transition": [
+    "/sounds/phase-transition.m4a",
+    "/sounds/phase-transition.mp3",
+  ],
+  "all-ready": ["/sounds/all-ready.m4a", "/sounds/all-ready.mp3"],
+  "clock-tick": ["/sounds/clock-tick.m4a", "/sounds/clock-tick.mp3"],
+  "clock-tick-fast": [
+    "/sounds/clock-tick-fast.m4a",
+    "/sounds/clock-tick-fast.mp3",
+  ],
+  "time-up": ["/sounds/time-up.m4a", "/sounds/time-up.mp3"],
 };
 
 const MUSIC_PATHS: Record<MusicTrackId, string> = {
@@ -33,8 +43,8 @@ const MUSIC_PATHS: Record<MusicTrackId, string> = {
  * Preloads commonly used sounds for instant playback
  */
 export function initializeSounds(): void {
-  // Preload button click sound (most common)
-  loadSound("button-click");
+  // Don't preload - sounds will load on first play
+  // This avoids errors on page load if files are missing
 }
 
 /**
@@ -46,9 +56,24 @@ function loadSound(soundId: SoundEffectId): Howl {
   }
 
   const sound = new Howl({
-    src: [SOUND_PATHS[soundId]],
+    src: SOUND_PATHS[soundId], // Already an array of formats
     preload: true,
-    volume: 0.8,
+    volume: AUDIO_VOLUMES.SOUND_EFFECTS,
+    onload: () => {
+      if (process.env.NODE_ENV === "development") {
+        console.log(`[Audio] Sound loaded: ${soundId}`);
+      }
+    },
+    onloaderror: () => {
+      if (process.env.NODE_ENV === "development") {
+        console.error(`[Audio] Load error for "${soundId}"`);
+      }
+    },
+    onplayerror: () => {
+      if (process.env.NODE_ENV === "development") {
+        console.error(`[Audio] Play error for "${soundId}"`);
+      }
+    },
   });
 
   soundEffects.set(soundId, sound);
@@ -57,6 +82,7 @@ function loadSound(soundId: SoundEffectId): Howl {
 
 /**
  * Load a music track into memory
+ * Uses lazy loading - track only loads when first played
  */
 function loadMusic(trackId: MusicTrackId): Howl {
   if (musicTracks.has(trackId)) {
@@ -65,9 +91,17 @@ function loadMusic(trackId: MusicTrackId): Howl {
 
   const track = new Howl({
     src: [MUSIC_PATHS[trackId]],
-    preload: true,
-    volume: 0.3,
+    preload: false, // Lazy load - only loads when play() is called
+    volume: AUDIO_VOLUMES.MUSIC_DEFAULT,
     loop: true,
+    html5: true, // Use HTML5 Audio for streaming large files (reduces memory)
+    onloaderror: () => {
+      if (process.env.NODE_ENV === "development") {
+        console.info(
+          `[Audio] Music track "${trackId}" not found. See public/sounds/music/MUSIC_GENERATION_GUIDE.md`
+        );
+      }
+    },
   });
 
   musicTracks.set(trackId, track);
@@ -93,7 +127,7 @@ export function playSound(
 
   // Play with fade in if specified
   if (options.fadeIn) {
-    const targetVolume = options.volume ?? 0.8;
+    const targetVolume = options.volume ?? AUDIO_VOLUMES.SOUND_EFFECTS;
     sound.volume(0);
     sound.play();
     sound.fade(0, targetVolume, options.fadeIn);

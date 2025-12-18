@@ -1,26 +1,26 @@
 import type { VoiceId, NarratorOptions } from "./types";
+import { RATE_LIMITS } from "./constants";
 
 // Voice ID mapping for ElevenLabs
-// These will need to be configured with actual ElevenLabs voice IDs
 const VOICE_IDS: Record<VoiceId, string> = {
-  "game-host": "default", // Replace with actual voice ID
-  "dramatic-host": "default",
-  pirate: "default",
-  robot: "default",
-  butler: "default",
-  surfer: "default",
-  detective: "default",
-  shakespeare: "default",
-  "valley-girl": "default",
-  announcer: "default",
-  electric: "default",
-  gamer: "default",
-  alien: "default",
-  retro: "default",
-  focused: "default",
-  intense: "default",
-  elegant: "default",
-  explorer: "default",
+  "game-host": "lIkvgvMqGbN2y0vNTyg8", // Custom: Localhost Party Host
+  "dramatic-host": "pNInz6obpgDQGcFmaJgB", // Adam - brash and confident
+  pirate: "SOYHLrjzK2X1ezoPC6cr", // Harry - animated warrior
+  robot: "N2lVS1w4EtoT3dr4eOWO", // Callum - gravelly, unsettling
+  butler: "JBFqnCBsd6RMkjVDRZzb", // George - warm British resonance
+  surfer: "IKne3meq5aSn9XLyUdCD", // Charlie - young Australian, energetic
+  detective: "onwK4e9ZLuTAKqWW03F9", // Daniel - British, formal
+  shakespeare: "JBFqnCBsd6RMkjVDRZzb", // George - warm British
+  "valley-girl": "FGY2WhTYpPnrIDTdsKH5", // Laura - sassy young female
+  announcer: "pqHfZKP75CvOlQylNhV4", // Bill - crisp, friendly narrator
+  electric: "TX3LPaxmHKxFdv7VOQHJ", // Liam - energetic young male
+  gamer: "IKne3meq5aSn9XLyUdCD", // Charlie - hyped Australian
+  alien: "N2lVS1w4EtoT3dr4eOWO", // Callum - unsettling edge
+  retro: "CwhRBWXzGAHq8TQ4Fs17", // Roger - classy, easy going
+  focused: "cjVigY5qzO86Huf0OWal", // Eric - smooth, professional
+  intense: "pNInz6obpgDQGcFmaJgB", // Adam - aggressive confidence
+  elegant: "Xb7hH8MSUJpSbSDYk0k2", // Alice - British professional
+  explorer: "nPczCjzI2devNBz1zQrb", // Brian - resonant, comforting
 };
 
 // Speech queue for sequential narration
@@ -35,25 +35,41 @@ class Narrator {
   private queue: NarrationQueueItem[] = [];
   private isProcessing = false;
   private currentAudio: HTMLAudioElement | null = null;
-  private apiKey: string | null = null;
+  private callTimestamps: number[] = [];
 
   constructor() {
-    // Get API key from environment
-    this.apiKey = process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY || null;
-
-    if (!this.apiKey) {
-      console.warn(
-        "ElevenLabs API key not configured. Voice narration will be disabled."
-      );
-    }
+    // Narrator now uses server-side proxy for TTS
+    // No API key needed on client side
   }
 
   /**
    * Speak text using ElevenLabs TTS
+   * Validates input length and queue size to prevent abuse
    */
   async speak(text: string, options: NarratorOptions = {}): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.queue.push({ text, options, resolve, reject });
+      // Validate text length
+      if (text.length > RATE_LIMITS.NARRATOR_MAX_TEXT_LENGTH) {
+        const error = new Error(
+          `Text exceeds maximum length of ${RATE_LIMITS.NARRATOR_MAX_TEXT_LENGTH} characters`
+        );
+        reject(error);
+        return;
+      }
+
+      // Validate queue size to prevent spam
+      if (this.queue.length >= RATE_LIMITS.NARRATOR_MAX_QUEUE_SIZE) {
+        const error = new Error(
+          `Narrator queue is full (max ${RATE_LIMITS.NARRATOR_MAX_QUEUE_SIZE} items)`
+        );
+        reject(error);
+        return;
+      }
+
+      // Sanitize text (basic XSS prevention, though TTS doesn't render HTML)
+      const sanitizedText = text.replace(/[<>]/g, "");
+
+      this.queue.push({ text: sanitizedText, options, resolve, reject });
 
       if (!this.isProcessing) {
         this.processQueue();
@@ -81,6 +97,41 @@ class Narrator {
   }
 
   /**
+   * Check if rate limit is exceeded
+   * Prevents API abuse by limiting calls to max per minute
+   */
+  private isRateLimited(): boolean {
+    const now = Date.now();
+    const oneMinuteAgo = now - 60000;
+
+    // Remove timestamps older than 1 minute
+    this.callTimestamps = this.callTimestamps.filter(
+      (timestamp) => timestamp > oneMinuteAgo
+    );
+
+    // Check if we've exceeded the rate limit
+    if (
+      this.callTimestamps.length >= RATE_LIMITS.NARRATOR_MAX_CALLS_PER_MINUTE
+    ) {
+      if (process.env.NODE_ENV === "development") {
+        console.warn(
+          `[Narrator] Rate limit exceeded: ${this.callTimestamps.length} calls in the last minute. Max allowed: ${RATE_LIMITS.NARRATOR_MAX_CALLS_PER_MINUTE}`
+        );
+      }
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Record an API call for rate limiting
+   */
+  private recordApiCall(): void {
+    this.callTimestamps.push(Date.now());
+  }
+
+  /**
    * Process narration queue
    */
   private async processQueue(): Promise<void> {
@@ -90,7 +141,13 @@ class Narrator {
     }
 
     this.isProcessing = true;
-    const item = this.queue.shift()!;
+    const item = this.queue.shift();
+
+    // Guard against concurrent queue modifications
+    if (!item) {
+      this.isProcessing = false;
+      return;
+    }
 
     try {
       // Pause before speaking if specified
@@ -113,7 +170,9 @@ class Narrator {
 
       item.resolve();
     } catch (error) {
-      console.error("Narration error:", error);
+      if (process.env.NODE_ENV === "development") {
+        console.error("Narration error:", error);
+      }
 
       if (item.options.onError) {
         item.options.onError(error as Error);
@@ -133,46 +192,51 @@ class Narrator {
     text: string,
     options: NarratorOptions
   ): Promise<void> {
-    // If no API key, fall back to silent mode
-    if (!this.apiKey) {
-      console.log("[Narrator]", text);
+    // Check rate limit before making API call
+    if (this.isRateLimited()) {
+      if (process.env.NODE_ENV === "development") {
+        console.log("[Narrator - Rate Limited]", text);
+      }
       await this.sleep(text.length * 50); // Simulate speech duration
       return;
     }
 
     try {
       const voiceId = VOICE_IDS[options.voice || "game-host"];
-      const stability = options.emotion === "excited" ? 0.3 : 0.5;
-      const similarityBoost = 0.75;
       const speed = options.speed || 1.0;
 
-      // Call ElevenLabs API
-      const response = await fetch(
-        `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "xi-api-key": this.apiKey,
-          },
-          body: JSON.stringify({
-            text,
-            model_id: "eleven_monolingual_v1",
-            voice_settings: {
-              stability,
-              similarity_boost: similarityBoost,
-              style: options.emotion === "dramatic" ? 0.5 : 0,
-              use_speaker_boost: true,
-            },
-          }),
-        }
-      );
+      // Record this API call for client-side rate limiting
+      this.recordApiCall();
+
+      // Call server-side TTS proxy (keeps API key secure)
+      const response = await fetch("/api/tts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text,
+          voiceId,
+          emotion: options.emotion || "neutral",
+        }),
+      });
 
       if (!response.ok) {
-        throw new Error(`ElevenLabs API error: ${response.statusText}`);
+        const error = await response.json().catch(() => ({
+          message: response.statusText,
+        }));
+
+        if (process.env.NODE_ENV === "development") {
+          console.error(
+            `[Narrator] TTS API error [${response.status}]:`,
+            error
+          );
+        }
+
+        throw new Error(error.message || "TTS service error");
       }
 
-      // Get audio blob
+      // Get audio blob from server
       const audioBlob = await response.blob();
       const audioUrl = URL.createObjectURL(audioBlob);
 
@@ -182,9 +246,14 @@ class Narrator {
       // Cleanup
       URL.revokeObjectURL(audioUrl);
     } catch (error) {
-      console.error("Failed to generate speech:", error);
-      // Fallback to console log
-      console.log("[Narrator]", text);
+      // Fallback to silent mode
+      if (process.env.NODE_ENV === "development") {
+        console.log("[Narrator - Fallback Mode]", text);
+        console.warn(
+          "TTS service unavailable, using silent fallback:",
+          error instanceof Error ? error.message : error
+        );
+      }
       await this.sleep(text.length * 50);
     }
   }
