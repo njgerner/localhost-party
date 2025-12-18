@@ -5,23 +5,27 @@ An AI-powered party game suite inspired by Jackbox Games, featuring dynamic AI h
 ## Features
 
 - **AI-Powered Gameplay**: Leverages Claude AI for dynamic content generation, intelligent game hosting, and real-time judging
+- **Immersive Audio**: AI narrator with ElevenLabs TTS, background music, and comprehensive sound effects
 - **Multiplayer Fun**: Real-time WebSocket-based gameplay with room codes
-- **Multiple Games**:
-  - AI Quiplash - Witty responses judged by AI
+- **Currently Playable**:
+  - **AI Quiplash** - Witty responses judged by AI ✅ IMPLEMENTED
+- **Planned Games**:
   - AI Drawful - Drawing prompts with AI-generated challenges
   - Fibbage with AI - AI generates plausible fake answers
   - Murder Mystery Generator - Unique mysteries created on the fly
   - Rap Battle - AI judges and provides commentary
 - **Dual View System**: Separate display (TV) and controller (phone) interfaces
-- **Dynamic AI Host**: Context-aware game host that responds to player actions
+- **Dynamic AI Narrator**: Context-aware narrator that reads game descriptions and provides commentary
 
 ## Tech Stack
 
 - **Frontend**: Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4
 - **Backend**: Next.js API Routes, Custom WebSocket Server (Socket.io)
-- **Database**: Neon (Serverless Postgres), Prisma ORM
+- **Database**: Neon (Serverless Postgres), Prisma ORM v7
 - **AI**: Claude API (Anthropic), Claude Agent SDK
-- **Deployment**: Vercel (app), Neon (database)
+- **Audio**: ElevenLabs TTS API, Howler.js for sound management
+- **Deployment**: Vercel (app), Doppler (secrets management), Neon (database)
+- **Testing**: Vitest, React Testing Library
 
 ## Project Structure
 
@@ -32,16 +36,25 @@ localhost-party/
 │   │   └── display/        # Display views (lobby, game, results)
 │   ├── (controller)/       # Mobile controller route group
 │   │   └── play/           # Player controller views
-│   └── api/                # REST API endpoints
+│   ├── api/                # REST API endpoints
+│   │   ├── config/         # App configuration
+│   │   └── tts/            # Text-to-speech proxy
+│   └── audio-test/         # Audio testing page
 ├── components/
 │   ├── display/            # Display view components
 │   └── controller/         # Controller view components
 ├── lib/
+│   ├── audio/              # Audio system (narrator, sounds, types)
+│   ├── context/            # React context providers (Audio, WebSocket)
+│   ├── games/              # Game logic modules (Quiplash)
 │   ├── types/              # Shared TypeScript types
-│   ├── context/            # React context providers
-│   ├── games/              # Game logic modules
-│   └── store.ts            # In-memory data store (temporary)
-└── prisma/                 # Database schema (to be set up)
+│   ├── db.ts               # Database client
+│   └── store.ts            # In-memory data store
+├── prisma/                 # Database schema
+├── public/sounds/          # Audio assets (music, sound effects)
+├── scripts/                # Utility scripts (voice listing, sound generation)
+├── websocket-server/       # Standalone WebSocket server
+└── server.ts               # Combined Next.js + WebSocket server
 ```
 
 ## Getting Started
@@ -50,7 +63,8 @@ localhost-party/
 
 - Node.js 20+ and npm
 - Neon database (free tier works great)
-- Anthropic API key
+- ElevenLabs API key (free tier: 10,000 chars/month)
+- Doppler CLI (for secrets management)
 
 ### Installation
 
@@ -67,19 +81,33 @@ cd localhost-party
 npm install
 ```
 
-3. Set up environment variables:
+3. Set up Doppler for secrets management:
+
+```bash
+# Install Doppler CLI
+brew install dopplerhq/cli/doppler  # macOS
+# or visit https://docs.doppler.com/docs/install-cli
+
+# Login and setup
+doppler login
+doppler setup
+# Select project: localhost-party
+# Select config: dev_personal
+```
+
+Add your secrets to Doppler:
+
+```bash
+doppler secrets set LH_PARTY_DATABASE_URL
+doppler secrets set NEXT_PUBLIC_LH_PARTY_WS_URL
+doppler secrets set NEXT_PUBLIC_ELEVENLABS_API_KEY
+```
+
+**Or** use `.env.local` without Doppler:
 
 ```bash
 cp .env.example .env.local
-```
-
-Add your credentials:
-
-```
-LH_PARTY_DATABASE_URL="your-neon-database-url"
-LH_PARTY_ANTHROPIC_API_KEY="your-anthropic-api-key"
-NEXT_PUBLIC_LH_PARTY_APP_URL="http://localhost:3000"
-NEXT_PUBLIC_LH_PARTY_WS_URL="http://localhost:3000"
+# Edit .env.local with your values
 ```
 
 4. Initialize the database:
@@ -101,13 +129,32 @@ npm run dev
 
 ### Available Scripts
 
-- `npm run dev` - Start development server (custom Next.js + Socket.io server)
-- `npm run dev:next` - Start Next.js only (without WebSocket)
+**Development:**
+
+- `npm run dev` - Start with Doppler secrets (Next.js + WebSocket)
+- `npm run dev:local` - Start without Doppler (uses .env.local)
+- `npm run dev:next` - Start Next.js only (no WebSocket)
+- `npm run dev:ws` - Start WebSocket server only
+
+**Production:**
+
 - `npm run build` - Build for production
-- `npm run start` - Start production server (with WebSocket)
-- `npm run start:next` - Start Next.js production (without WebSocket)
+- `npm run start` - Start production server (Next.js + WebSocket)
+- `npm run start:next` - Start Next.js production (no WebSocket)
+
+**Quality:**
+
 - `npm run lint` - Run ESLint
 - `npm run type-check` - Type check TypeScript files
+- `npm run test` - Run tests
+- `npm run test:watch` - Run tests in watch mode
+- `npm run test:ui` - Run tests with UI
+
+**Database:**
+
+- `npm run db:generate` - Generate Prisma client
+- `npm run db:push` - Push schema to database
+- `npm run db:studio` - Open Prisma Studio
 
 ### Git Hooks
 

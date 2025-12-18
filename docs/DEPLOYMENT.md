@@ -51,22 +51,43 @@ doppler projects create localhost-party
 
 ### 1.2 Configure Environments
 
-In Doppler dashboard, create these environments:
+In Doppler dashboard, create these configs:
 
-- **dev** - Local development
-- **stg** - Staging/preview
-- **prd** - Production
+- **dev** - Shared development environment
+- **dev_personal** - Individual developer's local secrets (not synced to deployments)
+- **preview** - Vercel preview deployments (used by PR previews)
+- **prod** - Production environment (used by Vercel production)
+
+**IMPORTANT**: Secrets added to `dev_personal` are NOT synced to deployed environments. Always add secrets to `dev`, `preview`, and `prod` configs for deployments to work.
 
 ### 1.3 Add Secrets to Doppler
 
-Add these secrets in Doppler for each environment:
+Add these secrets in Doppler for **each environment** (`dev`, `preview`, `prod`):
 
-| Secret                        | Description            | Example                  |
-| ----------------------------- | ---------------------- | ------------------------ |
-| `LH_PARTY_DATABASE_URL`       | Neon connection string | `postgresql://...`       |
-| `LH_PARTY_ANTHROPIC_API_KEY`  | Claude API key         | `sk-ant-...`             |
-| `NEXT_PUBLIC_LH_PARTY_APP_URL`| Vercel app URL         | `https://app.vercel.app` |
-| `NEXT_PUBLIC_LH_PARTY_WS_URL` | Railway WebSocket URL  | `https://ws.railway.app` |
+| Secret                           | Description            | Example                              | Required |
+| -------------------------------- | ---------------------- | ------------------------------------ | -------- |
+| `LH_PARTY_DATABASE_URL`          | Neon connection string | `postgresql://...`                   | Yes      |
+| `NEXT_PUBLIC_LH_PARTY_WS_URL`    | WebSocket server URL   | `https://localhost-party.vercel.app` | Yes      |
+| `NEXT_PUBLIC_ELEVENLABS_API_KEY` | ElevenLabs TTS API key | `sk_...`                             | Yes      |
+
+**How to add a secret to all configs:**
+
+```bash
+# Get value from dev_personal (if you added it there first)
+VALUE=$(doppler secrets get SECRET_NAME --config dev_personal --plain)
+
+# Set in all deployment configs
+doppler secrets set SECRET_NAME="$VALUE" --config dev
+doppler secrets set SECRET_NAME="$VALUE" --config preview
+doppler secrets set SECRET_NAME="$VALUE" --config prod
+```
+
+**Get your ElevenLabs API key:**
+
+1. Sign up at https://elevenlabs.io (free tier: 10,000 chars/month)
+2. Navigate to Profile → API Keys
+3. Create a new API key
+4. Copy the key (starts with `sk_`)
 
 ### 1.4 Link Local Project
 
