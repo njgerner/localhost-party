@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { useAudio } from "@/lib/context/AudioContext";
 import type { Player } from "@/lib/types";
@@ -13,12 +13,17 @@ interface RoomLobbyProps {
 export function RoomLobby({ roomCode, players }: RoomLobbyProps) {
   const { playSound } = useAudio();
   const previousPlayerCount = useRef(players.length);
-  // Use configured URL, or Vercel's auto-provided URL, or fallback to localhost
-  const appUrl =
-    process.env.NEXT_PUBLIC_LH_PARTY_APP_URL ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
-    "http://localhost:3000";
-  const joinUrl = `${appUrl}/play?code=${roomCode}`;
+
+  // Get the correct URL for any environment (localhost, Vercel preview, production)
+  // Using useState lazy initializer - guaranteed to run exactly once
+  const [appUrl] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return window.location.origin;
+    }
+    return "";
+  });
+
+  const joinUrl = appUrl ? `${appUrl}/play?code=${roomCode}` : "";
 
   // Player avatars - arcade/gaming themed
   const avatars = ["⚡", "🎮", "👾", "🕹️", "🎯", "🔥", "💎", "🚀"];
@@ -64,13 +69,22 @@ export function RoomLobby({ roomCode, players }: RoomLobbyProps) {
         {/* QR Code */}
         <div className="mb-10">
           <div className="qr-container rounded-xl p-6">
-            <QRCodeSVG
-              value={joinUrl}
-              size={180}
-              bgColor="#ffffff"
-              fgColor="#0a0a0f"
-              level="M"
-            />
+            {joinUrl ? (
+              <QRCodeSVG
+                value={joinUrl}
+                size={180}
+                bgColor="#ffffff"
+                fgColor="#0a0a0f"
+                level="M"
+              />
+            ) : (
+              <div
+                className="flex items-center justify-center"
+                style={{ width: 180, height: 180 }}
+              >
+                <div className="animate-pulse text-white/40">Loading...</div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -81,7 +95,7 @@ export function RoomLobby({ roomCode, players }: RoomLobbyProps) {
             className="text-lg neon-text-cyan"
             style={{ fontFamily: "var(--font-mono)" }}
           >
-            {appUrl}/play
+            {appUrl ? `${appUrl}/play` : "Loading..."}
           </p>
         </div>
       </div>
