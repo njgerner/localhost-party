@@ -209,6 +209,7 @@ function advanceToNextRound(gameState) {
     prompts: newPrompts,
     submissions: [],
     votes: [],
+    roundResults: {}, // Clear previous round results
     timeRemaining: DEFAULT_CONFIG.submissionTimeLimit,
   };
 }
@@ -426,6 +427,20 @@ function broadcastGameState(roomCode) {
   });
 }
 
+/**
+ * Sync scores from gameState.players back to room.players
+ * This is needed because broadcastGameState() uses room.players as the source
+ * Call this after any operation that modifies scores in gameState.players
+ */
+function syncPlayerScores(room) {
+  room.gameState.players.forEach((gsPlayer) => {
+    const roomPlayer = room.players.find((p) => p.id === gsPlayer.id);
+    if (roomPlayer) {
+      roomPlayer.score = gsPlayer.score;
+    }
+  });
+}
+
 // ============================================================================
 // Socket Event Handlers
 // ============================================================================
@@ -606,15 +621,7 @@ io.on('connection', (socket) => {
         socket.data.playerName,
         sanitized
       );
-
-      // Sync scores from gameState.players back to room.players
-      // This is needed because broadcastGameState() uses room.players
-      room.gameState.players.forEach((gsPlayer) => {
-        const roomPlayer = room.players.find((p) => p.id === gsPlayer.id);
-        if (roomPlayer) {
-          roomPlayer.score = gsPlayer.score;
-        }
-      });
+      syncPlayerScores(room);
     } else {
       if (!room.gameState.votes) {
         room.gameState.votes = [];
@@ -645,6 +652,7 @@ io.on('connection', (socket) => {
 
     if (room.gameState.gameType === 'quiplash') {
       room.gameState = advanceToNextRound(room.gameState);
+      syncPlayerScores(room);
       broadcastGameState(roomCode);
     }
   });

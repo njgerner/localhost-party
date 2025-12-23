@@ -122,7 +122,7 @@ describe("Quiplash Scoring", () => {
 
       // player2 gets 2 votes, player3 gets 1 vote
       gameState = handleVote(gameState, "player1", "Alice", "player2");
-      gameState = handleVote(gameState, "player2", "Bob", "player3"); // Can't vote for self, vote for player3
+      gameState = handleVote(gameState, "player2", "Bob", "player3");
       gameState = handleVote(gameState, "player3", "Charlie", "player2");
 
       // player2 has 2 votes = 200 points
