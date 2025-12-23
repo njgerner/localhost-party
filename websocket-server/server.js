@@ -11,14 +11,24 @@ const crypto = require('crypto');
 const port = parseInt(process.env.PORT || '3001', 10);
 
 // ============================================================================
-// Logging Helper (Beta version - verbose logging enabled)
+// Logging Helper (configurable via LOG_LEVEL environment variable)
 // ============================================================================
+// LOG_LEVEL options: 'debug' | 'info' | 'warn' | 'error' | 'none'
+// Default: 'info' (logs info, warn, error)
+const LOG_LEVEL = (process.env.LOG_LEVEL || 'info').toLowerCase();
 const LOG_LEVELS = {
-  DEBUG: process.env.LOG_LEVEL === 'debug',
-  INFO: true, // Always log info in beta
+  debug: 0,
+  info: 1,
+  warn: 2,
+  error: 3,
+  none: 4,
 };
+const CURRENT_LOG_LEVEL = LOG_LEVELS[LOG_LEVEL] ?? LOG_LEVELS.info;
 
 function log(level, category, message, data = null) {
+  const levelValue = LOG_LEVELS[level.toLowerCase()] ?? LOG_LEVELS.info;
+  if (levelValue < CURRENT_LOG_LEVEL) return;
+
   const timestamp = new Date().toISOString();
   const prefix = `[${timestamp}] [${level}] [${category}]`;
   if (data) {
@@ -29,13 +39,15 @@ function log(level, category, message, data = null) {
 }
 
 function logDebug(category, message, data = null) {
-  if (LOG_LEVELS.DEBUG) {
-    log('DEBUG', category, message, data);
-  }
+  log('DEBUG', category, message, data);
 }
 
 function logInfo(category, message, data = null) {
   log('INFO', category, message, data);
+}
+
+function logWarn(category, message, data = null) {
+  log('WARN', category, message, data);
 }
 
 // ============================================================================
@@ -165,6 +177,13 @@ function handleVote(gameState, voterId, voterName, votedForPlayerId) {
     return gameState;
   }
 
+  // Validate that the voted-for player exists
+  const votedForPlayer = gameState.players.find(p => p.id === votedForPlayerId);
+  if (!votedForPlayer) {
+    logInfo('Vote', `Player "${voterName}" voted for invalid player ID: ${votedForPlayerId} - rejected`);
+    return gameState;
+  }
+
   // Prevent duplicate votes
   const existingVote = gameState.votes?.find((v) => v.playerId === voterId);
   if (existingVote) {
@@ -172,8 +191,7 @@ function handleVote(gameState, voterId, voterName, votedForPlayerId) {
     return gameState;
   }
 
-  const votedForPlayer = gameState.players.find(p => p.id === votedForPlayerId);
-  logInfo('Vote', `Player "${voterName}" voted for "${votedForPlayer?.name || 'unknown'}"`);
+  logInfo('Vote', `Player "${voterName}" voted for "${votedForPlayer.name}"`);
 
   const newVote = {
     playerId: voterId,
@@ -486,6 +504,11 @@ const cleanupInterval = setInterval(cleanupIdleRooms, ROOM_CLEANUP_INTERVAL);
 function broadcastGameState(roomCode) {
   const room = rooms.get(roomCode);
   if (!room) return;
+
+  // Defensive check: detect if reference was accidentally broken
+  if (room.gameState.players !== room.players) {
+    logWarn('Broadcast', `Reference integrity broken for room ${roomCode} - restoring`);
+  }
 
   // Ensure gameState.players references room.players (single source of truth)
   room.gameState.players = room.players;
