@@ -77,6 +77,10 @@ function generatePromptsForRound(players, roundNumber) {
   return prompts;
 }
 
+/**
+ * Initialize a Quiplash game
+ * IMPORTANT: Uses room.players as the single source of truth (by reference)
+ */
 function initializeQuiplashGame(roomCode, players) {
   const prompts = generatePromptsForRound(players, 1);
 
@@ -85,7 +89,7 @@ function initializeQuiplashGame(roomCode, players) {
     gameType: 'quiplash',
     currentRound: 1,
     phase: 'submit',
-    players,
+    players, // Reference to room.players - single source of truth
     prompts,
     submissions: [],
     votes: [],
@@ -122,11 +126,17 @@ function handleSubmission(gameState, playerId, playerName, submissionText) {
   };
 }
 
+/**
+ * Handle a vote. When all players have voted, calculates scores.
+ * Returns the updated gameState with roundResults containing scores to apply.
+ */
 function handleVote(gameState, voterId, voterName, votedForPlayerId) {
+  // Prevent voting for yourself
   if (voterId === votedForPlayerId) {
     return gameState;
   }
 
+  // Prevent duplicate votes
   const existingVote = gameState.votes?.find((v) => v.playerId === voterId);
   if (existingVote) {
     return gameState;
@@ -142,31 +152,17 @@ function handleVote(gameState, voterId, voterName, votedForPlayerId) {
   const updatedVotes = [...(gameState.votes || []), newVote];
   const allPlayersVoted = updatedVotes.length === gameState.players.length;
 
-  // If all players voted, calculate and apply scores immediately
+  // If all players voted, calculate scores
   if (allPlayersVoted) {
-    console.log(`[handleVote] All players voted! Calculating scores...`);
-    console.log(`[handleVote] gameState.players IDs:`, gameState.players.map(p => p.id));
-
     const gameStateWithVotes = { ...gameState, votes: updatedVotes };
-    console.log(`[handleVote] Votes:`, updatedVotes.map(v => ({ voter: v.playerId, votedFor: v.data })));
-
     const roundScores = calculateRoundScores(gameStateWithVotes);
-    console.log(`[handleVote] roundScores:`, roundScores);
 
-    console.log(`[handleVote] Input players before updatePlayerScores:`, gameState.players.map(p => ({ id: p.id, name: p.name, score: p.score })));
-    const updatedPlayers = updatePlayerScores(gameState.players, roundScores);
-    console.log(`[handleVote] Output players after updatePlayerScores:`, updatedPlayers.map(p => ({ id: p.id, name: p.name, score: p.score })));
-
-    const result = {
+    return {
       ...gameState,
       votes: updatedVotes,
       phase: 'results',
-      players: updatedPlayers,
       roundResults: roundScores,
     };
-
-    console.log(`[handleVote] Returning gameState with players:`, result.players.map(p => ({ id: p.id, name: p.name, score: p.score })));
-    return result;
   }
 
   return {
@@ -192,36 +188,43 @@ function calculateRoundScores(gameState) {
   return scores;
 }
 
-function updatePlayerScores(players, roundScores) {
-  return players.map((player) => ({
-    ...player,
-    score: player.score + (roundScores[player.id] || 0),
-  }));
+/**
+ * Apply round scores directly to the canonical player array
+ * This is the ONLY place where player scores should be modified
+ */
+function applyScoresToPlayers(players, roundScores) {
+  if (!roundScores || Object.keys(roundScores).length === 0) {
+    return;
+  }
+
+  players.forEach((player) => {
+    const roundScore = roundScores[player.id] || 0;
+    player.score += roundScore;
+  });
 }
 
 // Advance to next round or end game
-// Note: Scores are already calculated and applied in handleVote() when transitioning to results
 function advanceToNextRound(gameState) {
   // Check if game is over
   if (gameState.currentRound >= DEFAULT_CONFIG.roundsPerGame) {
     return {
       ...gameState,
-      phase: 'results', // Final results - scores already applied in handleVote()
+      phase: 'results', // Final results
     };
   }
 
-  // Start next round - go directly to submit phase (no separate prompt display phase)
+  // Start next round
   const nextRound = gameState.currentRound + 1;
   const newPrompts = generatePromptsForRound(gameState.players, nextRound);
 
   return {
     ...gameState,
     currentRound: nextRound,
-    phase: 'submit', // Go directly to submit - players see prompts on their controllers
+    phase: 'submit',
     prompts: newPrompts,
     submissions: [],
     votes: [],
-    roundResults: {}, // Clear previous round results
+    roundResults: {},
     timeRemaining: DEFAULT_CONFIG.submissionTimeLimit,
   };
 }
@@ -304,7 +307,7 @@ const httpServer = createServer((req, res) => {
     const roomList = Array.from(rooms.entries()).map(([code, room]) => ({
       code,
       playerCount: room.players.length,
-      phase: room.gameState.phase,
+      phase: room.gameState?.phase,
       hasDisplay: !!room.displaySocketId,
     }));
     res.end(JSON.stringify({ rooms: roomList }));
@@ -362,8 +365,6 @@ const io = new Server(httpServer, {
       }
 
       // Allow localhost-party Vercel preview deployments only
-      // Pattern matches: localhost-party-{git-branch}-{team}.vercel.app or localhost-party-{hash}-{team}.vercel.app
-      // Anchored to prevent matching subdomains like "localhost-party-fake.malicious.vercel.app"
       if (origin.match(/^https:\/\/localhost-party(-[a-z0-9-]+)*\.vercel\.app$/)) {
         return callback(null, true);
       }
@@ -385,18 +386,20 @@ function getRoom(roomCode) {
   if (!room) {
     room = {
       code: roomCode,
-      players: [],
+      players: [], // Single source of truth for player data
       gameState: {
         roomCode,
         gameType: null,
         currentRound: 0,
         phase: 'lobby',
-        players: [],
+        players: [], // Will reference room.players
       },
       displaySocketId: null,
       lastActivity: Date.now(),
       createdAt: new Date(),
     };
+    // Make gameState.players reference room.players
+    room.gameState.players = room.players;
     rooms.set(roomCode, room);
     console.log(`[Room] Created room: ${roomCode}`);
   }
@@ -427,78 +430,19 @@ function cleanupIdleRooms() {
 
 const cleanupInterval = setInterval(cleanupIdleRooms, ROOM_CLEANUP_INTERVAL);
 
+/**
+ * Broadcast game state to all clients in a room
+ * IMPORTANT: room.players is the single source of truth
+ * gameState.players always references room.players
+ */
 function broadcastGameState(roomCode) {
   const room = rooms.get(roomCode);
   if (!room) return;
 
-  console.log(`[Broadcast] Before merge - room.players scores:`, room.players.map(p => ({ id: p.id, name: p.name, score: p.score })));
-  console.log(`[Broadcast] Before merge - gameState.players scores:`, room.gameState.players?.map(p => ({ id: p.id, name: p.name, score: p.score })) || 'undefined');
-
-  // Merge players: use room.players for membership but preserve scores from gameState.players
-  // This ensures scores calculated in handleVote() are not lost
-  const mergedPlayers = room.players.map(roomPlayer => {
-    const gsPlayer = room.gameState.players?.find(p => p.id === roomPlayer.id);
-    const finalScore = gsPlayer && gsPlayer.score > roomPlayer.score
-      ? gsPlayer.score
-      : roomPlayer.score;
-
-    console.log(`[Broadcast] Merging player ${roomPlayer.name}: roomPlayer.score=${roomPlayer.score}, gsPlayer.score=${gsPlayer?.score}, finalScore=${finalScore}`);
-
-    return {
-      ...roomPlayer,
-      score: finalScore,
-    };
-  });
-
-  // Update both arrays with merged data
-  room.gameState.players = mergedPlayers;
-  // Also update room.players to keep them in sync
-  mergedPlayers.forEach(merged => {
-    const roomPlayer = room.players.find(p => p.id === merged.id);
-    if (roomPlayer) {
-      roomPlayer.score = merged.score;
-    }
-  });
-
-  console.log(`[Broadcast] After merge - final players scores:`, room.gameState.players.map(p => ({ id: p.id, name: p.name, score: p.score })));
-  console.log(`[Broadcast] Emitting gameState with roundResults:`, room.gameState.roundResults);
+  // Ensure gameState.players references room.players (single source of truth)
+  room.gameState.players = room.players;
 
   io.to(roomCode).emit('game:state-update', room.gameState);
-  console.log(`[Broadcast] Room ${roomCode}:`, {
-    phase: room.gameState.phase,
-    players: room.players.length,
-  });
-}
-
-/**
- * Sync scores from gameState.players back to room.players
- * This is needed because broadcastGameState() uses room.players as the source
- * Call this after any operation that modifies scores in gameState.players
- */
-function syncPlayerScores(room) {
-  console.log(`[SyncScores] Starting sync...`);
-  console.log(`[SyncScores] gameState.players:`, room.gameState.players.map(p => ({ id: p.id, name: p.name, score: p.score })));
-  console.log(`[SyncScores] room.players:`, room.players.map(p => ({ id: p.id, name: p.name, score: p.score })));
-  console.log(`[SyncScores] roundResults:`, room.gameState.roundResults);
-
-  // Sync from roundResults directly for reliability
-  // roundResults contains the scores earned THIS round, keyed by player ID
-  if (room.gameState.roundResults && Object.keys(room.gameState.roundResults).length > 0) {
-    room.players.forEach((player) => {
-      const roundScore = room.gameState.roundResults[player.id] || 0;
-      const gameStatePlayer = room.gameState.players.find(p => p.id === player.id);
-      const targetScore = gameStatePlayer ? gameStatePlayer.score : player.score + roundScore;
-
-      console.log(`[SyncScores] Player ${player.name}: room.players.score=${player.score}, gameState.players.score=${gameStatePlayer?.score}, roundScore=${roundScore}, targetScore=${targetScore}`);
-
-      if (gameStatePlayer) {
-        player.score = gameStatePlayer.score;
-        console.log(`[SyncScores] Updated ${player.name} score to ${player.score} (from gameState)`);
-      }
-    });
-  }
-
-  console.log(`[SyncScores] After sync - room.players:`, room.players.map(p => ({ id: p.id, name: p.name, score: p.score })));
 }
 
 // ============================================================================
@@ -518,6 +462,8 @@ io.on('connection', (socket) => {
     socket.data.roomCode = roomCode;
     socket.data.isDisplay = true;
 
+    // Ensure players reference is correct before sending
+    room.gameState.players = room.players;
     socket.emit('game:state-update', room.gameState);
   });
 
@@ -542,9 +488,11 @@ io.on('connection', (socket) => {
     let player = room.players.find((p) => p.name === sanitizedName);
 
     if (player) {
+      // Reconnecting player
       player.socketId = socket.id;
       player.isConnected = true;
     } else {
+      // New player
       player = {
         id: crypto.randomUUID(),
         name: sanitizedName,
@@ -604,11 +552,13 @@ io.on('connection', (socket) => {
     }
 
     if (gameType === 'quiplash') {
+      // Initialize with room.players as the player reference
       room.gameState = initializeQuiplashGame(roomCode, room.players);
     } else {
       room.gameState.gameType = gameType;
       room.gameState.phase = 'prompt';
       room.gameState.currentRound = 1;
+      room.gameState.players = room.players;
     }
 
     broadcastGameState(roomCode);
@@ -640,6 +590,8 @@ io.on('connection', (socket) => {
         socket.data.playerName,
         sanitized
       );
+      // Maintain single source of truth
+      room.gameState.players = room.players;
     } else {
       if (!room.gameState.submissions) {
         room.gameState.submissions = [];
@@ -675,9 +627,7 @@ io.on('connection', (socket) => {
     }
 
     if (room.gameState.gameType === 'quiplash') {
-      console.log(`[Vote] Before handleVote - room.players scores:`, room.players.map(p => ({ id: p.id, name: p.name, score: p.score })));
-      console.log(`[Vote] Before handleVote - gameState.players scores:`, room.gameState.players.map(p => ({ id: p.id, name: p.name, score: p.score })));
-
+      const previousPhase = room.gameState.phase;
       room.gameState = handleVote(
         room.gameState,
         socket.data.playerId,
@@ -685,14 +635,13 @@ io.on('connection', (socket) => {
         sanitized
       );
 
-      console.log(`[Vote] After handleVote - phase: ${room.gameState.phase}`);
-      console.log(`[Vote] After handleVote - gameState.players scores:`, room.gameState.players.map(p => ({ id: p.id, name: p.name, score: p.score })));
-      console.log(`[Vote] After handleVote - roundResults:`, room.gameState.roundResults);
-      console.log(`[Vote] After handleVote - room.players scores:`, room.players.map(p => ({ id: p.id, name: p.name, score: p.score })));
+      // If we just transitioned to results, apply scores to the canonical players array
+      if (previousPhase === 'vote' && room.gameState.phase === 'results') {
+        applyScoresToPlayers(room.players, room.gameState.roundResults);
+      }
 
-      syncPlayerScores(room);
-
-      console.log(`[Vote] After syncPlayerScores - room.players scores:`, room.players.map(p => ({ id: p.id, name: p.name, score: p.score })));
+      // Maintain single source of truth
+      room.gameState.players = room.players;
     } else {
       if (!room.gameState.votes) {
         room.gameState.votes = [];
@@ -723,7 +672,8 @@ io.on('connection', (socket) => {
 
     if (room.gameState.gameType === 'quiplash') {
       room.gameState = advanceToNextRound(room.gameState);
-      syncPlayerScores(room);
+      // Maintain single source of truth
+      room.gameState.players = room.players;
       broadcastGameState(roomCode);
     }
   });
