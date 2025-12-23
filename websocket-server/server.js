@@ -11,8 +11,68 @@ const crypto = require('crypto');
 const port = parseInt(process.env.PORT || '3001', 10);
 
 // ============================================================================
+// Logging Helper (configurable via LOG_LEVEL environment variable)
+// ============================================================================
+// LOG_LEVEL options: 'debug' | 'info' | 'warn' | 'error' | 'none'
+// Default: 'info' (logs info, warn, error)
+const LOG_LEVEL = (process.env.LOG_LEVEL || 'info').toLowerCase();
+const LOG_LEVELS = {
+  debug: 0,
+  info: 1,
+  warn: 2,
+  error: 3,
+  none: 4,
+};
+const CURRENT_LOG_LEVEL = LOG_LEVELS[LOG_LEVEL] ?? LOG_LEVELS.info;
+
+function log(level, category, message, data = null) {
+  const levelValue = LOG_LEVELS[level.toLowerCase()] ?? LOG_LEVELS.info;
+  if (levelValue < CURRENT_LOG_LEVEL) return;
+
+  const timestamp = new Date().toISOString();
+  const prefix = `[${timestamp}] [${level}] [${category}]`;
+  if (data) {
+    console.log(`${prefix} ${message}`, JSON.stringify(data, null, 2));
+  } else {
+    console.log(`${prefix} ${message}`);
+  }
+}
+
+function logDebug(category, message, data = null) {
+  log('DEBUG', category, message, data);
+}
+
+function logInfo(category, message, data = null) {
+  log('INFO', category, message, data);
+}
+
+function logWarn(category, message, data = null) {
+  log('WARN', category, message, data);
+}
+
+// ============================================================================
 // In-memory Room Storage
 // ============================================================================
+/**
+ * CRITICAL ARCHITECTURE: Single Source of Truth for Player Data
+ * ==============================================================
+ *
+ * `room.players` is the ONLY canonical source of player data (including scores).
+ * `room.gameState.players` MUST always reference `room.players` (not a copy).
+ *
+ * This pattern ensures:
+ * 1. Score updates to `room.players` are immediately visible in `gameState`
+ * 2. No synchronization bugs between two separate player arrays
+ * 3. `broadcastGameState()` always sends current player data
+ *
+ * IMPORTANT: When calling game logic functions that return new gameState objects
+ * (like `handleVote()`, `advanceToNextRound()`), you MUST:
+ * 1. Apply any score changes to `room.players` using `applyScoresToPlayers()`
+ * 2. Reassign `room.gameState.players = room.players` to maintain the reference
+ *
+ * The `broadcastGameState()` function includes a defensive check to detect
+ * if this reference is accidentally broken.
+ */
 const rooms = new Map();
 const playerSockets = new Map();
 
@@ -77,6 +137,10 @@ function generatePromptsForRound(players, roundNumber) {
   return prompts;
 }
 
+/**
+ * Initialize a Quiplash game
+ * IMPORTANT: Uses room.players as the single source of truth (by reference)
+ */
 function initializeQuiplashGame(roomCode, players) {
   const prompts = generatePromptsForRound(players, 1);
 
@@ -85,7 +149,7 @@ function initializeQuiplashGame(roomCode, players) {
     gameType: 'quiplash',
     currentRound: 1,
     phase: 'submit',
-    players,
+    players, // Reference to room.players - single source of truth
     prompts,
     submissions: [],
     votes: [],
@@ -122,15 +186,32 @@ function handleSubmission(gameState, playerId, playerName, submissionText) {
   };
 }
 
+/**
+ * Handle a vote. When all players have voted, calculates scores.
+ * Returns the updated gameState with roundResults containing scores to apply.
+ */
 function handleVote(gameState, voterId, voterName, votedForPlayerId) {
+  // Prevent voting for yourself
   if (voterId === votedForPlayerId) {
+    logInfo('Vote', `Player "${voterName}" tried to vote for themselves - rejected`);
     return gameState;
   }
 
-  const existingVote = gameState.votes?.find((v) => v.playerId === voterId);
-  if (existingVote) {
+  // Validate that the voted-for player exists
+  const votedForPlayer = gameState.players.find(p => p.id === votedForPlayerId);
+  if (!votedForPlayer) {
+    logInfo('Vote', `Player "${voterName}" voted for invalid player ID: ${votedForPlayerId} - rejected`);
     return gameState;
   }
+
+  // Prevent duplicate votes
+  const existingVote = gameState.votes?.find((v) => v.playerId === voterId);
+  if (existingVote) {
+    logInfo('Vote', `Player "${voterName}" already voted - duplicate rejected`);
+    return gameState;
+  }
+
+  logInfo('Vote', `Player "${voterName}" voted for "${votedForPlayer.name}"`);
 
   const newVote = {
     playerId: voterId,
@@ -142,10 +223,28 @@ function handleVote(gameState, voterId, voterName, votedForPlayerId) {
   const updatedVotes = [...(gameState.votes || []), newVote];
   const allPlayersVoted = updatedVotes.length === gameState.players.length;
 
+  logInfo('Vote', `Votes: ${updatedVotes.length}/${gameState.players.length}`);
+
+  // If all players voted, calculate scores
+  if (allPlayersVoted) {
+    logInfo('Vote', 'All players have voted! Calculating scores...');
+
+    const gameStateWithVotes = { ...gameState, votes: updatedVotes };
+    const roundScores = calculateRoundScores(gameStateWithVotes);
+
+    logInfo('Vote', 'Round scores calculated', { roundScores });
+
+    return {
+      ...gameState,
+      votes: updatedVotes,
+      phase: 'results',
+      roundResults: roundScores,
+    };
+  }
+
   return {
     ...gameState,
     votes: updatedVotes,
-    phase: allPlayersVoted ? 'results' : gameState.phase,
   };
 }
 
@@ -166,39 +265,52 @@ function calculateRoundScores(gameState) {
   return scores;
 }
 
-function updatePlayerScores(players, roundScores) {
-  return players.map((player) => ({
-    ...player,
-    score: player.score + (roundScores[player.id] || 0),
-  }));
+/**
+ * Apply round scores directly to the canonical player array
+ * This is the ONLY place where player scores should be modified
+ */
+function applyScoresToPlayers(players, roundScores) {
+  if (!roundScores || Object.keys(roundScores).length === 0) {
+    logInfo('Scoring', 'No round scores to apply');
+    return;
+  }
+
+  logInfo('Scoring', 'Applying round scores', { roundScores });
+
+  players.forEach((player) => {
+    const roundScore = roundScores[player.id] || 0;
+    const previousScore = player.score;
+    player.score += roundScore;
+    logInfo('Scoring', `Player "${player.name}": ${previousScore} + ${roundScore} = ${player.score}`);
+  });
+
+  logInfo('Scoring', 'Final player scores', {
+    players: players.map(p => ({ name: p.name, score: p.score }))
+  });
 }
 
+// Advance to next round or end game
 function advanceToNextRound(gameState) {
-  const roundScores = calculateRoundScores(gameState);
-  const updatedPlayers = updatePlayerScores(gameState.players, roundScores);
-
+  // Check if game is over
   if (gameState.currentRound >= DEFAULT_CONFIG.roundsPerGame) {
     return {
       ...gameState,
-      players: updatedPlayers,
-      roundResults: roundScores,
-      phase: 'results',
+      phase: 'results', // Final results
     };
   }
 
-  // Start next round - go directly to submit phase (no separate prompt display phase)
+  // Start next round
   const nextRound = gameState.currentRound + 1;
-  const newPrompts = generatePromptsForRound(updatedPlayers, nextRound);
+  const newPrompts = generatePromptsForRound(gameState.players, nextRound);
 
   return {
     ...gameState,
     currentRound: nextRound,
-    phase: 'submit', // Go directly to submit - players see prompts on their controllers
-    players: updatedPlayers,
+    phase: 'submit',
     prompts: newPrompts,
     submissions: [],
     votes: [],
-    roundResults: roundScores,
+    roundResults: {},
     timeRemaining: DEFAULT_CONFIG.submissionTimeLimit,
   };
 }
@@ -281,7 +393,7 @@ const httpServer = createServer((req, res) => {
     const roomList = Array.from(rooms.entries()).map(([code, room]) => ({
       code,
       playerCount: room.players.length,
-      phase: room.gameState.phase,
+      phase: room.gameState?.phase,
       hasDisplay: !!room.displaySocketId,
     }));
     res.end(JSON.stringify({ rooms: roomList }));
@@ -339,8 +451,6 @@ const io = new Server(httpServer, {
       }
 
       // Allow localhost-party Vercel preview deployments only
-      // Pattern matches: localhost-party-{git-branch}-{team}.vercel.app or localhost-party-{hash}-{team}.vercel.app
-      // Anchored to prevent matching subdomains like "localhost-party-fake.malicious.vercel.app"
       if (origin.match(/^https:\/\/localhost-party(-[a-z0-9-]+)*\.vercel\.app$/)) {
         return callback(null, true);
       }
@@ -362,20 +472,22 @@ function getRoom(roomCode) {
   if (!room) {
     room = {
       code: roomCode,
-      players: [],
+      players: [], // Single source of truth for player data
       gameState: {
         roomCode,
         gameType: null,
         currentRound: 0,
         phase: 'lobby',
-        players: [],
+        players: [], // Will reference room.players
       },
       displaySocketId: null,
       lastActivity: Date.now(),
       createdAt: new Date(),
     };
+    // Make gameState.players reference room.players
+    room.gameState.players = room.players;
     rooms.set(roomCode, room);
-    console.log(`[Room] Created room: ${roomCode}`);
+    logInfo('Room', `Created room: ${roomCode}`);
   }
   room.lastActivity = Date.now();
   return room;
@@ -393,38 +505,51 @@ function cleanupIdleRooms() {
     if (isIdle && isEmpty && hasNoRecentActivity) {
       rooms.delete(code);
       cleanedCount++;
-      console.log(`[Cleanup] Removed idle room: ${code}`);
+      logInfo('Cleanup', `Removed idle room: ${code}`);
     }
   }
 
   if (cleanedCount > 0) {
-    console.log(`[Cleanup] Removed ${cleanedCount} room(s). Active: ${rooms.size}`);
+    logInfo('Cleanup', `Removed ${cleanedCount} room(s). Active: ${rooms.size}`);
   }
 }
 
 const cleanupInterval = setInterval(cleanupIdleRooms, ROOM_CLEANUP_INTERVAL);
 
+/**
+ * Broadcast game state to all clients in a room
+ * IMPORTANT: room.players is the single source of truth
+ * gameState.players always references room.players
+ */
 function broadcastGameState(roomCode) {
   const room = rooms.get(roomCode);
   if (!room) return;
 
+  // Defensive check: detect if reference was accidentally broken
+  if (room.gameState.players !== room.players) {
+    logWarn('Broadcast', `Reference integrity broken for room ${roomCode} - restoring`);
+  }
+
+  // Ensure gameState.players references room.players (single source of truth)
   room.gameState.players = room.players;
-  io.to(roomCode).emit('game:state-update', room.gameState);
-  console.log(`[Broadcast] Room ${roomCode}:`, {
-    phase: room.gameState.phase,
-    players: room.players.length,
+
+  logInfo('Broadcast', `Room ${roomCode} - Phase: ${room.gameState.phase}, Round: ${room.gameState.currentRound}`, {
+    players: room.players.map(p => ({ name: p.name, score: p.score, connected: p.isConnected })),
+    roundResults: room.gameState.roundResults || null
   });
+
+  io.to(roomCode).emit('game:state-update', room.gameState);
 }
 
 // ============================================================================
 // Socket Event Handlers
 // ============================================================================
 io.on('connection', (socket) => {
-  console.log(`[Socket] Connected: ${socket.id}`);
+  logDebug('Socket', `Connected: ${socket.id}`);
 
   // Display joins room
   socket.on('display:join', ({ roomCode }) => {
-    console.log(`[Display] Joining room: ${roomCode}`);
+    logInfo('Display', `Display joining room: ${roomCode}`);
 
     const room = getRoom(roomCode);
     room.displaySocketId = socket.id;
@@ -433,6 +558,8 @@ io.on('connection', (socket) => {
     socket.data.roomCode = roomCode;
     socket.data.isDisplay = true;
 
+    // Ensure players reference is correct before sending
+    room.gameState.players = room.players;
     socket.emit('game:state-update', room.gameState);
   });
 
@@ -451,15 +578,17 @@ io.on('connection', (socket) => {
       return;
     }
 
-    console.log(`[Player] "${sanitizedName}" joining room: ${upperRoomCode}`);
+    logInfo('Player', `"${sanitizedName}" joining room: ${upperRoomCode}`);
 
     const room = getRoom(upperRoomCode);
     let player = room.players.find((p) => p.name === sanitizedName);
 
     if (player) {
+      // Reconnecting player
       player.socketId = socket.id;
       player.isConnected = true;
     } else {
+      // New player
       player = {
         id: crypto.randomUUID(),
         name: sanitizedName,
@@ -479,12 +608,12 @@ io.on('connection', (socket) => {
 
     broadcastGameState(upperRoomCode);
     socket.emit('player:joined', player);
-    console.log(`[Player] "${sanitizedName}" joined room ${upperRoomCode}`);
+    logInfo('Player', `"${sanitizedName}" joined room ${upperRoomCode}`, { playerId: player.id, score: player.score });
   });
 
   // Disconnect
   socket.on('disconnect', () => {
-    console.log(`[Socket] Disconnected: ${socket.id}`);
+    logDebug('Socket', `Disconnected: ${socket.id}`);
 
     const roomCode = socket.data.roomCode;
     if (!roomCode) return;
@@ -496,7 +625,7 @@ io.on('connection', (socket) => {
       const player = room.players.find((p) => p.id === socket.data.playerId);
       if (player) {
         player.isConnected = false;
-        console.log(`[Player] "${player.name}" disconnected from ${roomCode}`);
+        logInfo('Player', `"${player.name}" disconnected from ${roomCode}`);
         broadcastGameState(roomCode);
       }
       playerSockets.delete(socket.id);
@@ -504,13 +633,13 @@ io.on('connection', (socket) => {
 
     if (socket.data.isDisplay) {
       room.displaySocketId = null;
-      console.log(`[Display] Disconnected from ${roomCode}`);
+      logInfo('Display', `Display disconnected from ${roomCode}`);
     }
   });
 
   // Start game
   socket.on('game:start', ({ roomCode, gameType }) => {
-    console.log(`[Game] Starting "${gameType}" in room ${roomCode}`);
+    logInfo('Game', `Starting "${gameType}" in room ${roomCode}`);
 
     const room = rooms.get(roomCode);
     if (!room) {
@@ -519,11 +648,13 @@ io.on('connection', (socket) => {
     }
 
     if (gameType === 'quiplash') {
+      // Initialize with room.players as the player reference
       room.gameState = initializeQuiplashGame(roomCode, room.players);
     } else {
       room.gameState.gameType = gameType;
       room.gameState.phase = 'prompt';
       room.gameState.currentRound = 1;
+      room.gameState.players = room.players;
     }
 
     broadcastGameState(roomCode);
@@ -555,6 +686,8 @@ io.on('connection', (socket) => {
         socket.data.playerName,
         sanitized
       );
+      // Maintain single source of truth
+      room.gameState.players = room.players;
     } else {
       if (!room.gameState.submissions) {
         room.gameState.submissions = [];
@@ -590,12 +723,21 @@ io.on('connection', (socket) => {
     }
 
     if (room.gameState.gameType === 'quiplash') {
+      const previousPhase = room.gameState.phase;
       room.gameState = handleVote(
         room.gameState,
         socket.data.playerId,
         socket.data.playerName,
         sanitized
       );
+
+      // If we just transitioned to results, apply scores to the canonical players array
+      if (previousPhase === 'vote' && room.gameState.phase === 'results') {
+        applyScoresToPlayers(room.players, room.gameState.roundResults);
+      }
+
+      // Maintain single source of truth
+      room.gameState.players = room.players;
     } else {
       if (!room.gameState.votes) {
         room.gameState.votes = [];
@@ -626,6 +768,8 @@ io.on('connection', (socket) => {
 
     if (room.gameState.gameType === 'quiplash') {
       room.gameState = advanceToNextRound(room.gameState);
+      // Maintain single source of truth
+      room.gameState.players = room.players;
       broadcastGameState(roomCode);
     }
   });
@@ -640,19 +784,19 @@ io.on('connection', (socket) => {
 // Graceful Shutdown
 // ============================================================================
 process.on('SIGTERM', () => {
-  console.log('[Server] Received SIGTERM, shutting down...');
+  logInfo('Server', 'Received SIGTERM, shutting down...');
   clearInterval(cleanupInterval);
   io.close(() => {
-    console.log('[Server] Socket.io closed');
+    logInfo('Server', 'Socket.io closed');
     process.exit(0);
   });
 });
 
 process.on('SIGINT', () => {
-  console.log('[Server] Received SIGINT, shutting down...');
+  logInfo('Server', 'Received SIGINT, shutting down...');
   clearInterval(cleanupInterval);
   io.close(() => {
-    console.log('[Server] Socket.io closed');
+    logInfo('Server', 'Socket.io closed');
     process.exit(0);
   });
 });
